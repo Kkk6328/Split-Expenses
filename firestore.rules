@@ -31,21 +31,23 @@ service cloud.firestore {
      && request.resource.data.access.toSet() == resource.data.access.toSet().union([request.auth.uid].toSet())
      && request.resource.data.joinToken is string
      && get(/databases/$(database)/documents/invites/$(request.resource.data.joinToken)).data.groupId == gid
-     && get(/databases/$(database)/documents/invites/$(request.resource.data.joinToken)).data.expires > request.time)
+     && get(/databases/$(database)/documents/invites/$(request.resource.data.joinToken)).data.get('revoked',false) == false)
    );
    allow delete: if false;
   }
   match /invites/{token} {
-   allow get: if signed() && resource.data.expires > request.time;
-   allow list: if false;
+   allow get: if signed() && resource.data.get('revoked',false) == false;
+   allow list: if signed() && resource.data.owner == request.auth.uid && request.query.limit <= 100;
    allow create: if signed() && token.size() == 64
-    && request.resource.data.keys().hasOnly(['groupId','owner','expires'])
+    && request.resource.data.keys().hasOnly(['groupId','owner','expires','revoked'])
     && request.resource.data.owner == request.auth.uid
     && get(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.owner == request.auth.uid
-    && request.resource.data.expires is timestamp
-    && request.resource.data.expires > request.time
-    && request.resource.data.expires <= request.time + duration.value(8, 'd');
-   allow update, delete: if false;
+    && request.resource.data.expires == null
+    && request.resource.data.revoked == false;
+   allow update: if signed() && resource.data.owner == request.auth.uid
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revoked'])
+    && request.resource.data.revoked == true;
+   allow delete: if false;
   }
  }
 }

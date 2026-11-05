@@ -1,8 +1,8 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js';
-import {getFirestore,doc,setDoc,getDoc,getDocs,collection,query,where,limit,runTransaction,updateDoc,arrayUnion,Timestamp} from 'https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js';
+import {getFirestore,doc,setDoc,getDoc,getDocs,collection,query,where,limit,runTransaction,updateDoc,arrayUnion,writeBatch,startAfter} from 'https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js';
 const cfg=window.APP_CONFIG;
-if(cfg.firebase?.projectId){
+if(!cfg.lineApiBase && cfg.firebase?.projectId){
  const app=initializeApp(cfg.firebase),auth=getAuth(app),db=getFirestore(app);
  const clean=g=>{const {access,owner,joinToken,canDelete,...data}=g;return {...data,canDelete:owner===auth.currentUser?.uid}};
  const payload=g=>{const {access,owner,joinToken,canDelete,...d}=g;return JSON.parse(JSON.stringify(d))};
@@ -15,8 +15,9 @@ if(cfg.firebase?.projectId){
    if(action==='list'){const s=await getDocs(query(collection(db,'groups'),where('access','array-contains',uid),limit(100)));return {groups:s.docs.map(d=>clean(d.data()))}}
    if(action==='create'){const g={...payload(b.group),cloud:true,version:1};const ref=doc(db,'groups',g.id);await runTransaction(db,async tx=>{if((await tx.get(ref)).exists())throw Error('這本帳本已存在');tx.set(ref,{...g,owner:uid,access:[uid]})});return {group:{...g,canDelete:true}}}
    if(action==='save'){const ref=doc(db,'groups',b.group.id);const g=await runTransaction(db,async tx=>{const s=await tx.get(ref);if(!s.exists())throw Error('帳本不存在');const old=s.data();if(old.version!==b.version)throw Error('朋友剛更新了帳本，請按重新同步後再試');const g={...payload(b.group),version:old.version+1,cloud:true};tx.set(ref,{...g,access:old.access,owner:old.owner,...(old.joinToken?{joinToken:old.joinToken}:{})});return {...g,canDelete:old.owner===uid}});return {group:g}}
-   if(action==='invite'){const ref=doc(db,'groups',b.groupId),s=await getDoc(ref);if(!s.exists()||s.data().deletedAt||s.data().owner!==uid)throw Error('只有帳本建立者可以產生邀請');const invite=crypto.randomUUID().replaceAll('-','')+crypto.randomUUID().replaceAll('-','');await setDoc(doc(db,'invites',invite),{groupId:b.groupId,owner:uid,expires:Timestamp.fromMillis(Date.now()+7*86400000)});return {invite}}
-   if(action==='join'){if(!/^[a-f0-9]{64}$/.test(b.invite))throw Error('邀請連結無效');const s=await getDoc(doc(db,'invites',b.invite));if(!s.exists()||s.data().expires.toMillis()<Date.now())throw Error('邀請已過期');const ref=doc(db,'groups',s.data().groupId);await updateDoc(ref,{access:arrayUnion(uid),joinToken:b.invite});const g=await getDoc(ref);if(g.data().deletedAt)throw Error('帳本已刪除');return {group:clean(g.data())}}
+   if(action==='invite'){const ref=doc(db,'groups',b.groupId),s=await getDoc(ref);if(!s.exists()||s.data().deletedAt||s.data().owner!==uid)throw Error('只有帳本建立者可以產生邀請');const invite=crypto.randomUUID().replaceAll('-','')+crypto.randomUUID().replaceAll('-','');await setDoc(doc(db,'invites',invite),{groupId:b.groupId,owner:uid,expires:null,revoked:false});return {invite}}
+   if(action==='revokeInvites'){const g=await getDoc(doc(db,'groups',b.groupId));if(!g.exists()||g.data().owner!==uid)throw Error('只有建立者可以停用邀請');let last=null;while(true){const constraints=[where('owner','==',uid),where('groupId','==',b.groupId),limit(100)];if(last)constraints.push(startAfter(last));const page=await getDocs(query(collection(db,'invites'),...constraints));if(page.empty)break;const batch=writeBatch(db);page.docs.forEach(d=>batch.update(d.ref,{revoked:true}));await batch.commit();last=page.docs.at(-1);if(page.size<100)break}return {ok:true}}
+   if(action==='join'){if(!/^[a-f0-9]{64}$/.test(b.invite))throw Error('邀請連結無效');const s=await getDoc(doc(db,'invites',b.invite));if(!s.exists()||s.data().revoked===true)throw Error('邀請已過期');const ref=doc(db,'groups',s.data().groupId);await updateDoc(ref,{access:arrayUnion(uid),joinToken:b.invite});const g=await getDoc(ref);if(g.data().deletedAt)throw Error('帳本已刪除');return {group:clean(g.data())}}
    throw Error('未知操作');
   }
  };

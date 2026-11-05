@@ -1,5 +1,6 @@
 // Public web configuration; no private keys or service-account credentials.
 window.APP_CONFIG = {
+ lineApiBase: '', // Fill only after deploying the user-owned LINE backend.
  liffId: '2012396328-SmwrIxyy',
  firebase: {
   apiKey: 'AIzaSyDa2nz2u4AU0Ij0vXQ8-7qKnDrA8FWy8FU',
