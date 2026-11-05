@@ -4,7 +4,7 @@ service cloud.firestore {
   function signed() { return request.auth != null; }
   function member(g) { return signed() && request.auth.uid in g.access; }
   function valid(g, gid) {
-   return g.keys().hasOnly(['id','name','members','expenses','settlements','created','cloud','version','owner','access','joinToken'])
+   return g.keys().hasOnly(['id','name','members','expenses','settlements','created','cloud','version','owner','access','joinToken','deletedAt'])
     && g.id == gid && g.name is string && g.name.size() > 0 && g.name.size() <= 60
     && g.members is list && g.members.size() > 0 && g.members.size() <= 30
     && g.expenses is list && g.expenses.size() <= 1000
@@ -24,8 +24,10 @@ service cloud.firestore {
      && request.resource.data.owner == resource.data.owner
      && request.resource.data.access == resource.data.access
      && request.resource.data.get('joinToken','') == resource.data.get('joinToken','')
-     && request.resource.data.version == resource.data.version + 1)
-    || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['access','joinToken'])
+     && request.resource.data.version == resource.data.version + 1
+     && (request.resource.data.get('deletedAt',null) == resource.data.get('deletedAt',null) || request.auth.uid == resource.data.owner))
+    || (resource.data.get('deletedAt',null) == null
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['access','joinToken'])
      && request.resource.data.access.toSet() == resource.data.access.toSet().union([request.auth.uid].toSet())
      && request.resource.data.joinToken is string
      && get(/databases/$(database)/documents/invites/$(request.resource.data.joinToken)).data.groupId == gid
