@@ -1,7 +1,49 @@
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{database}/documents {
-    // Access only through API after LINE ID-token verification and membership checks.
-    match /{document=**} { allow read, write: if false; }
+ match /databases/{database}/documents {
+  function signed() { return request.auth != null; }
+  function member(g) { return signed() && request.auth.uid in g.access; }
+  function valid(g, gid) {
+   return g.keys().hasOnly(['id','name','members','expenses','settlements','created','cloud','version','owner','access','joinToken'])
+    && g.id == gid && g.name is string && g.name.size() > 0 && g.name.size() <= 60
+    && g.members is list && g.members.size() > 0 && g.members.size() <= 30
+    && g.expenses is list && g.expenses.size() <= 1000
+    && g.settlements is list && g.settlements.size() <= 1000
+    && g.created is string && g.cloud == true && g.version is int
+    && g.owner is string && g.access is list && g.access.size() <= 30;
   }
+  match /groups/{gid} {
+   allow get: if signed() && (!exists(/databases/$(database)/documents/groups/$(gid)) || member(resource.data));
+   allow list: if member(resource.data) && request.query.limit <= 100;
+   allow create: if signed() && valid(request.resource.data,gid)
+    && request.resource.data.owner == request.auth.uid
+    && request.resource.data.access == [request.auth.uid]
+    && request.resource.data.version == 1;
+   allow update: if signed() && valid(request.resource.data,gid) && (
+    (member(resource.data)
+     && request.resource.data.owner == resource.data.owner
+     && request.resource.data.access == resource.data.access
+     && request.resource.data.get('joinToken','') == resource.data.get('joinToken','')
+     && request.resource.data.version == resource.data.version + 1)
+    || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['access','joinToken'])
+     && request.resource.data.access.toSet() == resource.data.access.toSet().union([request.auth.uid].toSet())
+     && request.resource.data.joinToken is string
+     && get(/databases/$(database)/documents/invites/$(request.resource.data.joinToken)).data.groupId == gid
+     && get(/databases/$(database)/documents/invites/$(request.resource.data.joinToken)).data.expires > request.time)
+   );
+   allow delete: if false;
+  }
+  match /invites/{token} {
+   allow get: if signed() && resource.data.expires > request.time;
+   allow list: if false;
+   allow create: if signed() && token.size() == 64
+    && request.resource.data.keys().hasOnly(['groupId','owner','expires'])
+    && request.resource.data.owner == request.auth.uid
+    && get(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.owner == request.auth.uid
+    && request.resource.data.expires is timestamp
+    && request.resource.data.expires > request.time
+    && request.resource.data.expires <= request.time + duration.value(8, 'd');
+   allow update, delete: if false;
+  }
+ }
 }
