@@ -1,5 +1,5 @@
 {
  "name":"split-expenses-line","main":"worker.js","compatibility_date":"2026-11-05",
  "vars":{"LINE_CHANNEL_ID":"2012396328","APP_ORIGIN":"https://kkk6328.github.io"},
- "d1_databases":[{"binding":"DB","database_name":"split-expenses","database_id":"REPLACE_WITH_CREATED_D1_ID"}]
+ "d1_databases":[{"binding":"DB","database_name":"split-expenses","database_id":"deed0852-799c-4a75-8b4e-8f5e0179f3e1"}]
 }

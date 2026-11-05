@@ -1,6 +1,6 @@
 // Public web configuration; no private keys or service-account credentials.
 window.APP_CONFIG = {
- lineApiBase: '', // Fill only after deploying the user-owned LINE backend.
+ lineApiBase: 'https://split-expenses-line.8s8r24zvt2.workers.dev/', // Fill only after deploying the user-owned LINE backend.
  liffId: '2012396328-SmwrIxyy',
  firebase: {
   apiKey: 'AIzaSyDa2nz2u4AU0Ij0vXQ8-7qKnDrA8FWy8FU',
@@ -10,3 +10,6 @@ window.APP_CONFIG = {
   appId: '1:338265918038:web:cff77ed84eef6fb6f949f7'
  }
 };
+
+// Legacy access is retained only for explicit Google-owned book migration.
+if(new URLSearchParams(location.search).get("legacy")==="1")window.APP_CONFIG.lineApiBase="";
