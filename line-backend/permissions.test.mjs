@@ -1,0 +1,36 @@
+import worker from './worker.js';
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {mkdtempSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+const file=mkdtempSync(tmpdir()+'/split-test-')+'/db.sqlite';
+const python="import sqlite3,json,sys\nc=sqlite3.connect(sys.argv[1]);c.row_factory=sqlite3.Row\nout=[]\nfor q in json.load(sys.stdin):\n r=c.execute(q['sql'],q.get('args',[]));out.append({'results':[dict(x) for x in r.fetchall()],'meta':{'changes':max(r.rowcount,0)}})\nc.commit();print(json.dumps(out))";
+function query(qs){const p=spawnSync('python',['-c',python,file],{input:JSON.stringify(qs),encoding:'utf8'});if(p.status)throw Error(p.stderr);return JSON.parse(p.stdout)}
+query([{sql:'CREATE TABLE books(id TEXT PRIMARY KEY, owner TEXT, version INTEGER, data TEXT)'},{sql:'CREATE TABLE memberships(book_id TEXT,user_id TEXT,PRIMARY KEY(book_id,user_id))'},{sql:'CREATE TABLE invites(token TEXT PRIMARY KEY,book_id TEXT,revoked INTEGER DEFAULT 0)'}]);
+const db={prepare(sql){return{sql,args:[],bind(...args){this.args=args;return this},async first(){return query([this])[0].results[0]||null},async all(){return query([this])[0]},async run(){return query([this])[0]}}},async batch(qs){return query(qs)}};
+globalThis.fetch=async (_url,req)=>{const token=new URLSearchParams(req.body).get('id_token');return new Response(JSON.stringify(token==='bad'?{}:{sub:token,name:'Name '+token}),{status:token==='bad'?401:200})};
+async function api(user,action,data={}){const r=await worker.fetch(new Request('https://test/',{method:'POST',headers:{Authorization:'Bearer '+user,Origin:'https://site.test'},body:JSON.stringify({action,...data})}),{APP_ORIGIN:'https://site.test',LINE_CHANNEL_ID:'test',DB:db});return{status:r.status,...await r.json()}}
+const base=id=>({id,name:id,members:[{id:'fake',name:'Fake'}],expenses:[],settlements:[],created:'2026-11-05'});
+assert.equal((await api('bad','list')).status,401);
+let a=(await api('Alice','create',{group:base('A')})).group;
+let b=(await api('Bob','create',{group:base('B')})).group;
+assert.deepEqual(a.members,[{id:'Alice',name:'Name Alice'}]);
+assert.deepEqual((await api('Alice','list')).groups.map(g=>g.id),['A']);
+assert.deepEqual((await api('Bob','list')).groups.map(g=>g.id),['B']);
+assert.equal((await api('Bob','save',{group:a,version:a.version})).status,403);
+assert.equal((await api('Bob','invite',{groupId:'A'})).status,403);
+assert.equal((await api('Alice','save',{group:{...a,members:[...a.members,{id:'Mallory',name:'M'}]},version:a.version})).status,403);
+const invitation=(await api('Alice','invite',{groupId:'A'})).invite;
+const joined=await api('Bob','join',{invite:invitation});
+assert.equal(joined.status,200);
+assert.deepEqual(joined.group.members.map(m=>m.id),['Alice','Bob']);
+assert.equal((await api('Bob','join',{invite:invitation})).group.members.length,2);
+assert.deepEqual((await api('Bob','list')).groups.map(g=>g.id).sort(),['A','B']);
+assert.deepEqual((await api('Carol','list')).groups,[]);
+assert.equal((await api('Carol','save',{group:joined.group,version:joined.group.version})).status,403);
+await api('Alice','revokeInvites',{groupId:'A'});
+assert.equal((await api('Carol','join',{invite:invitation})).status,403);
+assert.equal((await api('Bob','save',{group:{...joined.group,deletedAt:1},version:joined.group.version})).status,403);
+assert.equal((await api('Bob','save',{group:joined.group,version:joined.group.version})).status,200);
+assert.equal((await api('Alice','save',{group:joined.group,version:joined.group.version})).status,409);
+console.log('PASS: verified identity, book isolation, member immutability, invitation join/idempotency/revocation, delete ownership and version conflicts');
