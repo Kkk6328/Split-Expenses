@@ -18,7 +18,7 @@
 
 ## LINE 管理員設定
 
-自己的 Provider：暖暖分帳。建立 LINE Login Channel（Web app，Taiwan），LIFF Endpoint 為 https://kkk6328.github.io/Split-Expenses/ ，Size Full，Scopes profile / openid。將 LIFF ID 填入 config.js。相關條款需帳號持有人確認，分享選擇器的資訊使用同意也需持有人確認。開啟 share target picker 後，使用者自行選擇分享對象；未開啟時可複製邀請連結貼至 LINE。
+Provider：暖暖分帳（2005720216）。LINE Login Channel：2012396328（Web app，Taiwan）。LIFF ID：2012396328-SmwrIxyy。LIFF Endpoint 為 https://kkk6328.github.io/Split-Expenses/ ，Size Full，Scopes profile / openid。將 LIFF ID 填入 config.js。相關條款需帳號持有人確認，分享選擇器的資訊使用同意也需持有人確認。開啟 share target picker 後，使用者自行選擇分享對象；未開啟時可複製邀請連結貼至 LINE。
 
 禁止在公開 config.js 放 Channel Secret、service-account keys 或私密憑證。
 

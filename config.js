@@ -1,6 +1,6 @@
 // Public web configuration; no private keys or service-account credentials.
 window.APP_CONFIG = {
- liffId: '',
+ liffId: '2012396328-SmwrIxyy',
  firebase: {
   apiKey: 'AIzaSyDa2nz2u4AU0Ij0vXQ8-7qKnDrA8FWy8FU',
   authDomain: 'split-expenses-4aa7f.firebaseapp.com',
