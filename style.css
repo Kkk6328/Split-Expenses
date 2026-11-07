@@ -167,3 +167,9 @@ button.expense-summary:hover{background:#f8fafc;filter:none}
 .expense-detail-actions button{min-width:0;white-space:nowrap;font-size:14px;padding:10px 8px}
 .exchange-ratio{display:inline-block;font-variant-numeric:tabular-nums}
 @media(max-width:340px){.expense-detail-actions{grid-template-columns:1fr}.expense-detail-actions button{width:100%}}
+
+.row>div{min-width:0}.row input,.row select{min-width:0;max-width:100%;box-sizing:border-box}
+input[type=date]{min-width:0;width:100%;max-width:100%;min-inline-size:0}
+input[type=date]::-webkit-date-and-time-value{text-align:left;min-width:0}
+.expense-photo-heading{font-size:15px;margin:24px 0 8px}
+@media(max-width:600px){.date-category-row{grid-template-columns:minmax(0,1fr)}}
