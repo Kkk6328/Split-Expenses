@@ -44,7 +44,9 @@ function briefMoney(cents){return new Intl.NumberFormat('zh-TW',{minimumFraction
 
 function memberAvatar(member){
  const initials=esc(Array.from(member.lineName||member.name)[0]||'人');
- const picture=member.linePicture;
+ const currentUser=cfg.lineApiBase?window.WarmCloud?.user():null;
+ const isCurrentMember=currentUser&&(member.id===currentUser.uid||member.lineUserId===currentUser.uid);
+ const picture=(isCurrentMember&&currentUser.pictureUrl)||member.linePicture;
  const valid=typeof picture==='string'&&/^https:\/\/profile\.line-scdn\.net\/[a-zA-Z0-9_/?&=.%+~-]+$/.test(picture);
  return initials+(valid?`<img src="${esc(picture)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`:'');
 }

@@ -26,7 +26,7 @@ if(window.APP_CONFIG.lineApiBase){
  async function announce(){
   await request('list');
   const p=await liff.getProfile();
-  user={uid:p.userId,displayName:p.displayName};needsRenewal=false;
+  user={uid:p.userId,displayName:p.displayName,pictureUrl:p.pictureUrl};needsRenewal=false;
   signal({uid:user.uid,name:user.displayName});
  }
  async function reconnect(){
