@@ -1,0 +1,26 @@
+import worker from './worker.js';
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {mkdtempSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+const file=mkdtempSync(tmpdir()+'/split-test-')+'/db.sqlite';
+const python="import sqlite3,json,sys\nc=sqlite3.connect(sys.argv[1]);c.row_factory=sqlite3.Row\nout=[]\nfor q in json.load(sys.stdin):\n r=c.execute(q['sql'],q.get('args',[]));out.append({'results':[dict(x) for x in r.fetchall()],'meta':{'changes':max(r.rowcount,0)}})\nc.commit();print(json.dumps(out))";
+function query(qs){const p=spawnSync('python',['-c',python,file],{input:JSON.stringify(qs),encoding:'utf8'});if(p.status)throw Error(p.stderr);return JSON.parse(p.stdout)}
+query([{sql:'CREATE TABLE books(id TEXT PRIMARY KEY, owner TEXT, version INTEGER, data TEXT)'},{sql:'CREATE TABLE memberships(book_id TEXT,user_id TEXT,PRIMARY KEY(book_id,user_id))'},{sql:'CREATE TABLE invites(token TEXT PRIMARY KEY,book_id TEXT,revoked INTEGER DEFAULT 0)'}]);
+const db={prepare(sql){return{sql,args:[],bind(...args){this.args=args;return this},async first(){return query([this])[0].results[0]||null},async all(){return query([this])[0]},async run(){return query([this])[0]}}},async batch(qs){return query(qs)}};
+globalThis.fetch=async (_url,req)=>{const token=new URLSearchParams(req.body).get('id_token');return new Response(JSON.stringify(token==='bad'?{}:{sub:token,name:'Name '+token}),{status:token==='bad'?401:200})};
+async function api(user,action,data={}){const r=await worker.fetch(new Request('https://test/',{method:'POST',headers:{Authorization:'Bearer '+user,Origin:'https://site.test'},body:JSON.stringify({action,...data})}),{APP_ORIGIN:'https://site.test',LINE_CHANNEL_ID:'test',DB:db});return{status:r.status,...await r.json()}}
+const base=id=>({id,name:id,members:[{id:'fake',name:'Fake'}],expenses:[],settlements:[],created:'2026-11-05'});
+
+const a=(await api('Alice','create',{group:base('A')})).group;
+const added=await api('Alice','addMember',{groupId:'A',name:'小安'});assert.equal(added.status,200);
+const role=added.group.members.find(m=>m.name==='小安');
+const invite=(await api('Alice','invite',{groupId:'A'})).invite;
+const preview=await api('Bob','previewInvite',{invite});assert.equal(preview.roles[0].id,role.id);assert(!preview.group);
+assert.equal((await api('Bob','list')).groups.length,0);
+const joined=await api('Bob','join',{invite,memberId:role.id});assert.equal(joined.status,200);assert.equal(joined.group.members.find(m=>m.id===role.id).lineUserId,'Bob');
+assert.equal((await api('Carol','join',{invite,memberId:role.id})).status,409);
+assert.equal((await api('Bob','join',{invite,memberId:role.id})).status,200);
+assert.equal((await api('Bob','addMember',{groupId:'A',name:'other'})).status,403);
+assert.equal((await api('Carol','list')).groups.length,0);
+console.log('PASS: owner-only placeholders, preview without book access, stable role ID, exclusive claim, repeat join and isolation');
