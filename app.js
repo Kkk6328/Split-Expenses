@@ -52,11 +52,17 @@ function balanceItems(book){
    if(share.id!==expense.payer)items.get(share.id).push({kind:'expense',expenseId:expense.id,title:expense.title,date:expense.date,description:'分攤費用',amount:-share.amount});
   }
  }
+
  for(const payment of book.settlements){
-  const title=titles.get(payment.expenseId);
-  const suffix=title?' · '+title:'';
-  items.get(payment.from).push({kind:'payment',expenseId:payment.expenseId,title:'已還款'+suffix,date:payment.date,description:'付給 '+name(book,payment.to),amount:payment.amount});
-  items.get(payment.to).push({kind:'payment',expenseId:payment.expenseId,title:'已收款'+suffix,date:payment.date,description:'收到 '+name(book,payment.from)+' 的還款',amount:-payment.amount});
+  const parts=[...paymentApplications(payment)];
+  const unassigned=unassignedPayment(payment);
+  if(unassigned>0)parts.push({amount:unassigned});
+  for(const part of parts){
+   const title=titles.get(part.expenseId);
+   const suffix=title?' · '+title:'';
+   items.get(payment.from).push({kind:'payment',expenseId:part.expenseId,title:'已還款'+suffix,date:payment.date,description:'付給 '+name(book,payment.to),amount:part.amount});
+   items.get(payment.to).push({kind:'payment',expenseId:part.expenseId,title:'已收款'+suffix,date:payment.date,description:'收到 '+name(book,payment.from)+' 的還款',amount:-part.amount});
+  }
  }
  return items;
 }
@@ -185,7 +191,22 @@ function showBalanceDetails(memberId){
 
 function plan(g){const b=balances(g),deb=g.members.filter(m=>b[m.id]<0).map(m=>({...m,left:-b[m.id]})),cre=g.members.filter(m=>b[m.id]>0).map(m=>({...m,left:b[m.id]}));let out=[],i=0,j=0;while(i<deb.length&&j<cre.length){const amount=Math.min(deb[i].left,cre[j].left);out.push({from:deb[i].id,to:cre[j].id,amount});deb[i].left-=amount;cre[j].left-=amount;if(!deb[i].left)i++;if(!cre[j].left)j++}return out}
 const name=(g,id)=>g.members.find(m=>m.id===id)?.name||'未知成員';
-function render(){const g=group();document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(picker){picker.innerHTML=activeGroups().map(x=>`<option value="${esc(x.id)}" ${x.id===g?.id?'selected':''}>${esc(x.name)}</option>`).join('');picker.onchange=()=>{state.current=picker.value;tab='expenses';persist();render()};$('mobileNew').onclick=newGroup;}if(cfg.lineApiBase&&$('emptyTitle')){$('emptyTitle').textContent=cloud()?'尚未建立帳本':'登入後查看帳本';$('emptyCreate').textContent=cloud()?'建立帳本':'LINE 登入'}$('groupCount').textContent=activeGroups().length;$('groups').innerHTML=activeGroups().map(x=>`<button class="group ${x.id===g?.id?'selected':''}" data-group="${x.id}">▤ ${esc(x.name)}<small>${x.members.length} 位成員 · ${x.expenses.length} 筆費用${x.cloud?' · 共用':''}</small></button>`).join('');$('groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.current=b.dataset.group;tab='expenses';persist();render()});$('empty').hidden=!!g;$('book').hidden=!g;if(!g)return;$('deleteBook').hidden=g.cloud&&g.canDelete!==true;$('revokeInvites').hidden=!g.cloud||g.canDelete!==true;$('invite').hidden=g.cloud&&g.canDelete!==true;$('bookTitle').textContent=g.name;$('bookMeta').textContent=`建立日期 ${g.created}`;$('total').textContent='NT$ '+money(g.expenses.reduce((s,e)=>s+e.baseCents,0));$('memberCount').textContent=g.members.length+' 人';$('expenseCount').textContent=g.expenses.length+' 筆';document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$('addExpense').hidden=tab!=='expenses';$('viewHint').textContent=tab==='expenses'?'費用紀錄與換算明細':tab==='balances'?'成員餘額 · 點金額查看計算明細':'管理帳本的分攤成員';const c=$('content');if(tab==='expenses'){c.innerHTML=g.expenses.length?expenseDays(g.expenses).map(day=>`<section class="expense-day"><div class="day-heading"><h3>${esc(day.date)}</h3><span>${day.expenses.length} 筆 · NT$ ${money(day.total)}</span></div>${day.expenses.map(e=>`<button type="button" class="expense expense-summary shared-expense" data-expense="${esc(e.id)}" aria-label="查看費用：${esc(e.title)}"><span class="icon">${esc(e.category==='🧋'?'🥤':e.category)}</span><span class="detail"><strong>${esc(e.title)}</strong><small>${esc(name(g,e.payer))} 先付</small><span class="paid-total">NT$ ${briefMoney(e.baseCents)}</span></span><span class="amount"><small>${e.split.length} 人 · 各付</small>${e.baseCents%e.split.length?'約 ':''}NT$ ${briefMoney(Math.round(e.baseCents/e.split.length))}</span></button>`).join('')}</section>`).join(''):'<div class="empty"><div class="empty-symbol">▤</div><p>尚無費用，請點「記一筆」新增。</p></div>';c.querySelectorAll('[data-expense]').forEach(b=>b.onclick=()=>showExpense(b.dataset.expense))}else if(tab==='members'){c.innerHTML=g.members.map(m=>`<div class="person"><span class="avatar" aria-hidden="true">${memberAvatar(m)}</span><span class="detail">${esc(m.lineName||m.name)}${m.lineName&&m.lineName!==m.name?`<small>帳本暱稱：${esc(m.name)}</small>`:''}${cfg.lineApiBase&&(m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?'<small>你</small>':cfg.lineApiBase?`<small>${m.lineUserId||/^U[0-9a-f]{32}$/.test(m.id)?'已加入':'待配對'}</small>`:''}</span></div>`).join('')+(cfg.lineApiBase?`<p class="hint">只有加入此帳本的成員可以查看與記帳。${g.canDelete?'使用上方「邀請成員」分享加入連結。':'由帳本建立者邀請新成員。'}</p>`:'<button id="addMember" class="quiet" style="margin-top:20px">＋ 加入成員</button>');if(cfg.lineApiBase){const pay=document.createElement('button');pay.textContent='設定我的收款資訊';pay.className='quiet';pay.onclick=()=>openPayment(g.id, g.members.find(m=>m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?.id);c.append(pay)}if(cfg.lineApiBase&&g.canDelete){const add=document.createElement('button');add.textContent='＋ 預設成員';add.className='quiet';add.onclick=()=>modal('預設成員',field('name','成員暱稱','','text','required maxlength="40"')+'<p class="hint">可先替此成員記帳，朋友登入 LINE 後再認領。</p>','新增成員',async f=>{await requireMemberVersion();const r=await api('addMember',{groupId:g.id,name:f.get('name')});state.groups[state.groups.findIndex(x=>x.id===g.id)]=r.group;persist();render()});c.append(add)}if(!cfg.lineApiBase){$('addMember').onclick=()=>modal('新增成員',field('name','成員暱稱','','text','required maxlength="40"'),'加入',async f=>{const n=f.get('name').trim();if(!n||g.members.some(m=>m.name===n))throw Error('請輸入不同的暱稱');const next=structuredClone(g);next.members.push({id:uid(),name:n});await commit(next)})}}else{const b=balances(g),p=plan(g);c.innerHTML='<div class="balance-board">'+balanceRows(g,b)+'</div>'+suggestedTransfers(g,p,c)+repaymentHistory(g,c);c.querySelectorAll('[data-balance-member]').forEach(button=>{button.onclick=()=>showBalanceDetails(button.dataset.balanceMember)});c.querySelectorAll('[data-settle]').forEach(el=>el.onclick=()=>{const s=p[Number(el.dataset.settle)];modal('確認這筆還款',`<p>${esc(name(g,s.from))} 已支付 ${esc(name(g,s.to))}<br><strong>NT$ ${money(s.amount)}</strong></p><p class="hint">此操作僅記錄還款，不會實際轉帳。</p>`,'確認已付款',async()=>{const next=structuredClone(g);next.settlements.push({...s,id:uid(),date:today()});await commit(next)})});c.querySelectorAll('[data-undo]').forEach(el=>el.onclick=()=>modal('撤銷還款紀錄','<p>撤銷後，這筆金額將重新納入待結清款項。</p>','撤銷紀錄',async()=>{const next=structuredClone(g);next.settlements=next.settlements.filter(s=>s.id!==el.dataset.undo);await commit(next)}))}}
+function render(){const g=group();document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(picker){picker.innerHTML=activeGroups().map(x=>`<option value="${esc(x.id)}" ${x.id===g?.id?'selected':''}>${esc(x.name)}</option>`).join('');picker.onchange=()=>{state.current=picker.value;tab='expenses';persist();render()};$('mobileNew').onclick=newGroup;}if(cfg.lineApiBase&&$('emptyTitle')){$('emptyTitle').textContent=cloud()?'尚未建立帳本':'登入後查看帳本';$('emptyCreate').textContent=cloud()?'建立帳本':'LINE 登入'}$('groupCount').textContent=activeGroups().length;$('groups').innerHTML=activeGroups().map(x=>`<button class="group ${x.id===g?.id?'selected':''}" data-group="${x.id}">▤ ${esc(x.name)}<small>${x.members.length} 位成員 · ${x.expenses.length} 筆費用${x.cloud?' · 共用':''}</small></button>`).join('');$('groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.current=b.dataset.group;tab='expenses';persist();render()});$('empty').hidden=!!g;$('book').hidden=!g;if(!g)return;$('deleteBook').hidden=g.cloud&&g.canDelete!==true;$('revokeInvites').hidden=!g.cloud||g.canDelete!==true;$('invite').hidden=g.cloud&&g.canDelete!==true;$('bookTitle').textContent=g.name;$('bookMeta').textContent=`建立日期 ${g.created}`;$('total').textContent='NT$ '+money(g.expenses.reduce((s,e)=>s+e.baseCents,0));$('memberCount').textContent=g.members.length+' 人';$('expenseCount').textContent=g.expenses.length+' 筆';document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$('addExpense').hidden=tab!=='expenses';$('viewHint').textContent=tab==='expenses'?'費用紀錄與換算明細':tab==='balances'?'成員餘額 · 點金額查看計算明細':'管理帳本的分攤成員';const c=$('content');if(tab==='expenses'){c.innerHTML=g.expenses.length?expenseDays(g.expenses).map(day=>`<section class="expense-day"><div class="day-heading"><h3>${esc(day.date)}</h3><span>${day.expenses.length} 筆 · NT$ ${money(day.total)}</span></div>${day.expenses.map(e=>`<button type="button" class="expense expense-summary shared-expense" data-expense="${esc(e.id)}" aria-label="查看費用：${esc(e.title)}"><span class="icon">${esc(e.category==='🧋'?'🥤':e.category)}</span><span class="detail"><strong>${esc(e.title)}</strong><small>${esc(name(g,e.payer))} 先付</small><span class="paid-total">NT$ ${briefMoney(e.baseCents)}</span></span><span class="amount"><small>${e.split.length} 人 · 各付</small>${e.baseCents%e.split.length?'約 ':''}NT$ ${briefMoney(Math.round(e.baseCents/e.split.length))}</span></button>`).join('')}</section>`).join(''):'<div class="empty"><div class="empty-symbol">▤</div><p>尚無費用，請點「記一筆」新增。</p></div>';c.querySelectorAll('[data-expense]').forEach(b=>b.onclick=()=>showExpense(b.dataset.expense))}else if(tab==='members'){c.innerHTML=g.members.map(m=>`<div class="person"><span class="avatar" aria-hidden="true">${memberAvatar(m)}</span><span class="detail">${esc(m.lineName||m.name)}${m.lineName&&m.lineName!==m.name?`<small>帳本暱稱：${esc(m.name)}</small>`:''}${cfg.lineApiBase&&(m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?'<small>你</small>':cfg.lineApiBase?`<small>${m.lineUserId||/^U[0-9a-f]{32}$/.test(m.id)?'已加入':'待配對'}</small>`:''}</span></div>`).join('')+(cfg.lineApiBase?`<p class="hint">只有加入此帳本的成員可以查看與記帳。${g.canDelete?'使用上方「邀請成員」分享加入連結。':'由帳本建立者邀請新成員。'}</p>`:'<button id="addMember" class="quiet" style="margin-top:20px">＋ 加入成員</button>');if(cfg.lineApiBase){const pay=document.createElement('button');pay.textContent='設定我的收款資訊';pay.className='quiet';pay.onclick=()=>openPayment(g.id, g.members.find(m=>m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?.id);c.append(pay)}if(cfg.lineApiBase&&g.canDelete){const add=document.createElement('button');add.textContent='＋ 預設成員';add.className='quiet';add.onclick=()=>modal('預設成員',field('name','成員暱稱','','text','required maxlength="40"')+'<p class="hint">可先替此成員記帳，朋友登入 LINE 後再認領。</p>','新增成員',async f=>{await requireMemberVersion();const r=await api('addMember',{groupId:g.id,name:f.get('name')});state.groups[state.groups.findIndex(x=>x.id===g.id)]=r.group;persist();render()});c.append(add)}if(!cfg.lineApiBase){$('addMember').onclick=()=>modal('新增成員',field('name','成員暱稱','','text','required maxlength="40"'),'加入',async f=>{const n=f.get('name').trim();if(!n||g.members.some(m=>m.name===n))throw Error('請輸入不同的暱稱');const next=structuredClone(g);next.members.push({id:uid(),name:n});await commit(next)})}}else{const b=balances(g),p=plan(g);c.innerHTML=mySettlement(g,p)+'<div class="balance-board">'+balanceRows(g,b)+'</div>'+suggestedTransfers(g,p,c)+repaymentHistory(g,c);c.querySelectorAll('[data-balance-member]').forEach(button=>{button.onclick=()=>showBalanceDetails(button.dataset.balanceMember)});
+ c.querySelectorAll('[data-settle]').forEach(button=>{
+  button.onclick=()=>{
+   const transfer=p[Number(button.dataset.settle)];
+   if(transfer)openRepaymentEditor(g,{...transfer,id:uid(),date:today()});
+  };
+ });
+ c.querySelectorAll('[data-edit-payment]').forEach(button=>{
+  button.onclick=()=>{
+   const payment=g.settlements.find(item=>item.id===button.dataset.editPayment);
+   if(payment)openRepaymentEditor(g,payment,{existing:true});
+  };
+ });
+ c.querySelectorAll('[data-undo]').forEach(button=>{button.onclick=()=>undoRepayment(g,button.dataset.undo)});
+}}
+
 
 
 function repaymentSection(title,kind,book,container,groups,count,empty=''){
@@ -214,29 +235,56 @@ function suggestedTransfers(g,transfers,container){
  });
  return repaymentSection('建議轉帳方式','suggestions',g,container,groups,transfers.length,'<p class="hint">目前沒有待結清款項</p>');
 }
+
+function mySettlement(book,transfers){
+ const userId=window.WarmCloud?.user()?.uid;
+ const member=userId&&book.members.find(item=>item.id===userId||item.lineUserId===userId);
+ if(!member)return '';
+ const outgoing=transfers.filter(item=>item.from===member.id);
+ const incoming=transfers.filter(item=>item.to===member.id);
+ const total=items=>items.reduce((sum,item)=>sum+item.amount,0);
+ const rows=(items,out)=>items.map(item=>{
+  const other=out?item.to:item.from;
+  return `<div class="transfer my-transfer"><span class="detail">${out?'付給':'由'} ${esc(name(book,other))}${out?'':'付款'}<small>NT$ ${money(item.amount)}</small></span>${out?`<button type="button" class="quiet" data-payment="${esc(other)}">轉帳資訊</button>`:''}</div>`;
+ }).join('');
+ return `<section class="my-settlement">
+  <h3>我的結算</h3>
+  <div class="my-settlement-totals"><div><small>待付</small><strong>NT$ ${money(total(outgoing))}</strong></div><div><small>待收</small><strong>NT$ ${money(total(incoming))}</strong></div></div>
+  ${rows(outgoing,true)+rows(incoming,false)||'<p class="hint">目前已結清</p>'}
+  <button type="button" class="quiet" data-balance-member="${esc(member.id)}">查看我的餘額明細</button>
+ </section>`;
+}
+
 function repaymentHistory(book,container){
  if(!book.settlements.length)return '';
  const titles=new Map(book.expenses.map(expense=>[expense.id,expense.title]));
  const groups=new Map();
  for(const payment of book.settlements){
-  const key=payment.expenseId?'expense:'+payment.expenseId:'general';
-  if(!groups.has(key))groups.set(key,{title:payment.expenseId?titles.get(payment.expenseId)||'指定費用':'整本帳本還款',rows:[],total:0});
+  const parts=paymentApplications(payment);
+  const unassigned=unassignedPayment(payment);
+  const single=parts.length===1&&unassigned===0;
+  const key=single?'expense:'+parts[0].expenseId:parts.length?'multi':'general';
+  const title=single?titles.get(parts[0].expenseId)||'指定費用':parts.length?'跨費用還款':'整本帳本還款';
+  if(!groups.has(key))groups.set(key,{title,rows:[],total:0});
   const entry=groups.get(key);
-  entry.rows.push(`<div class="transfer"><span class="detail">${esc(name(book,payment.from))} → ${esc(name(book,payment.to))}<small>${esc(payment.date)} · NT$ ${money(payment.amount)}</small></span><button type="button" class="quiet" data-undo="${esc(payment.id)}">撤銷</button></div>`);
+  const applications=parts.map(part=>`<small>${esc(titles.get(part.expenseId)||'指定費用')} · NT$ ${money(part.amount)}</small>`).join('');
+  const remainder=parts.length&&unassigned>0?`<small>尚未分配 · NT$ ${money(unassigned)}</small>`:'';
+  entry.rows.push(`<div class="transfer"><span class="detail">${esc(name(book,payment.from))} → ${esc(name(book,payment.to))}<small>${esc(payment.date||'未記錄日期')} · NT$ ${money(payment.amount)}</small>${single?'':applications+remainder}</span><div class="expense-actions"><button type="button" class="quiet" data-edit-payment="${esc(payment.id)}">更正</button><button type="button" class="quiet" data-undo="${esc(payment.id)}">撤銷</button></div></div>`);
   entry.total+=payment.amount;
  }
  return repaymentSection('已記錄還款','repayments',book,container,groups,book.settlements.length);
 }
+
 async function commit(next){await save(next);state.groups[state.groups.findIndex(g=>g.id===next.id)]=next;persist();render()}
 async function editExpense(id){const g=group(),e=g.expenses.find(e=>e.id===id);const draftId=e?.id||uid();let images=[],imageRevision='',photoAvailable=true,readImages=null,expenseSaved=false;if(e&&cfg.lineApiBase){try{await requireMedia();const data=await api('getExpenseImages',{groupId:g.id,expenseId:e.id});images=data.images;imageRevision=data.revision}catch(error){photoAvailable=false;toast('圖片暫時無法載入，可先編輯費用：'+error.message)}}if(group()?.id!==g.id)return;const initialImages=JSON.stringify(images);const opt=(v,label)=>`<option value="${v}" ${e?.currency===v?'selected':''}>${label}</option>`;modal(e?'編輯這筆費用':'新增費用',field('title','花費名稱',e?.title||'','text','required maxlength="80" placeholder="例如：安國的午餐"')+'<div class="row"><div>'+field('amount','原幣金額',e?.amount||'','number','required min="0.01" max="1000000000" step="0.01"')+'</div><div><label for="currency">幣別</label><select id="currency" name="currency">'+[['TWD','TWD 新台幣'],['KRW','KRW 韓元'],['JPY','JPY 日圓'],['USD','USD 美元'],['EUR','EUR 歐元'],['CNY','CNY 人民幣'],['HKD','HKD 港幣'],['THB','THB 泰銖']].map(a=>opt(...a)).join('')+'</select></div></div>'+field('rate','當時匯率：1 單位外幣 = 多少 TWD',e?.rate||1,'number','required min="0.000001" max="1000000" step="any"')+'<p class="hint" id="conversion"></p><div class="row date-category-row"><div>'+field('date','消費日期',e?.date||today(),'date','required')+'</div><div><label for="category">分類</label><select id="category" name="category">'+[["🍴","餐飲"],["🍳","早餐"],["🍜","麵食"],["🍚","正餐"],["🍖","烤肉"],["🍣","日式料理"],["🍕","速食"],["☕","咖啡"],["🥤","飲料"],["🍰","甜點"],["🍦","冰品"],["🍺","酒水"],["🏠","住宿"],["🏨","飯店"],["🚕","計程車"],["🚇","地鐵"],["🚌","公車"],["🚆","火車"],["✈️","機票"],["🚗","租車"],["⛽","加油"],["🅿️","停車"],["🛍","購物"],["🛒","超市"],["👕","衣服"],["👟","鞋子"],["💄","美妝"],["🎁","伴手禮"],["🎟","門票"],["🎢","遊樂園"],["🎬","電影"],["🎤","唱歌"],["🎮","遊戲"],["🏛️","展覽"],["💆","按摩"],["💊","藥品"],["🏥","醫療"],["📱","網路／SIM 卡"],["🧺","洗衣"],["🧾","其他"]].map(([v,label])=>`<option value="${v}" ${(e?.category==='🧋'?'🥤':e?.category)===v?'selected':''}>${v} ${label}</option>`).join('')+'</select></div></div><label for="payer">誰先付款？</label><select id="payer" name="payer">'+g.members.map(m=>`<option value="${m.id}" ${e?.payer===m.id?'selected':''}>${esc(m.name)}</option>`).join('')+'</select><label>分給誰？（平均分攤）</label>'+g.members.map(m=>`<label class="check"><input type="checkbox" name="split" value="${m.id}" ${!e||e.split.includes(m.id)?'checked':''}>${esc(m.name)}</label>`).join('')+'<h3 class="expense-photo-heading">收據／照片（選填）</h3>'+(photoAvailable?'<div id="photoEditor"></div>':'<p class="hint">圖片暫時無法載入，原有圖片會保留。請稍後重試。</p>')+(e?'<p><button type="button" id="removeExpense" class="quiet">刪除這筆費用</button></p>':''),'儲存這筆費用',async f=>{const currency=f.get('currency'),amount=Number(f.get('amount')),rate=currency==='TWD'?1:Number(f.get('rate')),split=f.getAll('split'),baseCents=Math.round(amount*rate*100);if(!split.length)throw Error('請至少選擇一位分攤成員');if(!Number.isSafeInteger(baseCents)||baseCents<1||!Number.isFinite(rate)||rate<=0)throw Error('請確認金額與匯率');const title=f.get('title').trim();if(!title)throw Error('請填寫花費名稱');const expense={id:draftId,title,amount,currency,rate,baseCents,split,payer:f.get('payer'),date:f.get('date'),category:f.get('category'),created:e?.created||Date.now()};const selectedImages=readImages?await readImages():images,imagesChanged=photoAvailable&&JSON.stringify(selectedImages)!==initialImages;if(imagesChanged)await requireMedia();const latest=state.groups.find(x=>x.id===g.id);if(!latest||latest.deletedAt)throw Error('帳本已變更，請重新開啟');const next=structuredClone(latest),index=next.expenses.findIndex(x=>x.id===draftId);if(e&&index<0)throw Error('這筆費用已被刪除，請重新同步');if(index>=0){
  const prior=next.expenses[index];
- if(next.settlements.some(s=>s.expenseId===draftId)){
+ if(next.settlements.some(s=>paymentApplications(s).some(part=>part.expenseId===draftId))){
   const priorShares=new Map(allocations(prior).map(a=>[a.id,a.amount]));
   const nextShares=allocations(expense);
   if(prior.payer!==expense.payer||nextShares.length!==priorShares.size||nextShares.some(a=>priorShares.get(a.id)!==a.amount))throw Error('請先到分帳結算撤銷這筆費用的付款紀錄，再修改分攤金額或付款人。');
  }
  next.expenses[index]=expense;
-}else next.expenses.push(expense);await commit(next);expenseSaved=true;if(imagesChanged){try{const result=await api('saveExpenseImages',{groupId:g.id,expenseId:draftId,images:selectedImages,revision:imageRevision});imageRevision=result.revision}catch(error){throw Error('費用已儲存，圖片尚未儲存。請再按儲存重試；不會重複新增費用。'+error.message)}}toast('費用'+(imagesChanged?'與圖片':'')+'已儲存')});if(photoAvailable)readImages=imageEditor(images,3);const update=()=>{const twd=$('currency').value==='TWD';$('f-rate').readOnly=twd;if(twd)$('f-rate').value=1;$('conversion').textContent=`換算約 NT$ ${money(Math.round(Number($('f-amount').value)*Number($('f-rate').value)*100))}，此匯率只套用到本筆費用。`};['currency','f-amount','f-rate'].forEach(id=>$(id).oninput=update);update();if(e)$('removeExpense').onclick=()=>{modal('刪除費用',`<p>確定刪除「${esc(e.title)}」？</p>`,'確定刪除',async()=>{const latest=group();if(latest?.id!==g.id)throw Error('帳本已更新，請重新開啟');if(latest.settlements.some(s=>s.expenseId===e.id))throw Error('請先到分帳結算撤銷這筆費用的付款紀錄，再刪除費用。');const next=structuredClone(latest);next.expenses=next.expenses.filter(x=>x.id!==e.id);await commit(next)})}}
+}else next.expenses.push(expense);await commit(next);expenseSaved=true;if(imagesChanged){try{const result=await api('saveExpenseImages',{groupId:g.id,expenseId:draftId,images:selectedImages,revision:imageRevision});imageRevision=result.revision}catch(error){throw Error('費用已儲存，圖片尚未儲存。請再按儲存重試；不會重複新增費用。'+error.message)}}toast('費用'+(imagesChanged?'與圖片':'')+'已儲存')});if(photoAvailable)readImages=imageEditor(images,3);const update=()=>{const twd=$('currency').value==='TWD';$('f-rate').readOnly=twd;if(twd)$('f-rate').value=1;$('conversion').textContent=`換算約 NT$ ${money(Math.round(Number($('f-amount').value)*Number($('f-rate').value)*100))}，此匯率只套用到本筆費用。`};['currency','f-amount','f-rate'].forEach(id=>$(id).oninput=update);update();if(e)$('removeExpense').onclick=()=>{modal('刪除費用',`<p>確定刪除「${esc(e.title)}」？</p>`,'確定刪除',async()=>{const latest=group();if(latest?.id!==g.id)throw Error('帳本已更新，請重新開啟');if(latest.settlements.some(s=>paymentApplications(s).some(part=>part.expenseId===e.id)))throw Error('請先到分帳結算撤銷這筆費用的付款紀錄，再刪除費用。');const next=structuredClone(latest);next.expenses=next.expenses.filter(x=>x.id!==e.id);await commit(next)})}}
 async function requireMemberVersion(){try{const cap=await api('capabilities');if(cap.membershipVersion<3)throw Error('version')}catch(e){if(e.code==='line-auth'||e.status===401)throw e;if(e.status===400||e.message==='version'||e.message==='未知操作')throw Error('邀請功能尚未啟用，請先完成後端更新。現有帳本仍可記帳。');throw e}}
 async function invite(){const g=group();if(!g.cloud){if(!cloud()){toast(cfg.lineApiBase?'請先點右上角 LINE 登入':'請先點右上角 Google 共用登入，即可免費共用帳本');return}modal('啟用多人共用','<p>將這本帳本上傳至雲端，之後可透過邀請連結加入。</p>','啟用共用',async()=>{const r=await api('create',{group:g});state.groups[state.groups.findIndex(x=>x.id===g.id)]=r.group;persist();render();toast('已啟用共用，請再點邀請成員')});return}try{if(cfg.lineApiBase)await requireMemberVersion();const {invite}=await api('invite',{groupId:g.id});const url=new URL(location.href);url.search='';url.hash='join='+invite;const text=`邀請你加入「${g.name}」帳本\n${url.href}`;if(ready&&liff.isApiAvailable('shareTargetPicker')){await liff.shareTargetPicker([{type:'text',text}])}else{try{await navigator.clipboard.writeText(text);toast('邀請連結已複製，可貼到 LINE 給成員')}catch{modal('分享邀請連結',`<p>將以下連結傳給要加入此帳本的朋友。</p><label for="inviteLink">邀請連結</label><input id="inviteLink" readonly value="${esc(url.href)}"><p class="hint">長按連結即可複製。只有加入此帳本的人才能查看內容。</p>`,'完成',async()=>{})}}}catch(e){toast(e.message)}}
 function exportCSV(){const g=group();const rows=[['日期','項目','幣別','原幣金額','匯率（TWD/原幣）','台幣金額','付款人','分攤成員'],...g.expenses.map(e=>[e.date,e.title,e.currency,e.amount,e.rate,(e.baseCents/100).toFixed(2),name(g,e.payer),e.split.map(id=>name(g,id)).join('、')])];const safe=s=>/^[=+@\-\t\r]/.test(String(s))?"'"+s:String(s);const blob=new Blob(['\ufeff'+rows.map(r=>r.map(s=>'"'+safe(s).replace(/"/g,'""')+'"').join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=g.name.replace(/[\\/:*?"<>|]/g,'_')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
@@ -258,39 +306,162 @@ document.addEventListener('click',e=>{document.querySelectorAll('.book-menu[open
 
 function expensePosition(g,e,user){const me=g.members.find(m=>m.id===user||m.lineUserId===user);if(!me)return {label:'總額',amount:e.baseCents,kind:'total'};const own=allocations(e).find(a=>a.id===me.id)?.amount||0;if(e.payer===me.id){const amount=e.baseCents-own;return {label:amount?'應收':'自行負擔',amount:amount||own,kind:amount?'receivable':'self'}}return own?{label:'應付',amount:own,kind:'payable'}:{label:'未參與',amount:0,kind:'none'}}
 
-function recordedSharePayment(book, expense, memberId) {
- return book.settlements
-  .filter(s=>s.expenseId===expense.id&&s.from===memberId&&s.to===expense.payer)
-  .reduce((total,s)=>total+s.amount,0);
+
+function paymentApplications(payment){
+ return Array.isArray(payment.applications)
+  ? payment.applications
+  : payment.expenseId?[{expenseId:payment.expenseId,amount:payment.amount}]:[];
+}
+function unassignedPayment(payment){
+ return payment.amount-paymentApplications(payment).reduce((sum,part)=>sum+part.amount,0);
+}
+function recordedSharePayment(book,expense,memberId,excludeId){
+ return book.settlements.reduce((sum,payment)=>{
+  if(payment.id===excludeId||payment.from!==memberId||payment.to!==expense.payer)return sum;
+  return sum+paymentApplications(payment).reduce((total,part)=>total+(part.expenseId===expense.id?part.amount:0),0);
+ },0);
+}
+function availableRepaymentExpenses(book,payment){
+ return book.expenses.filter(expense=>expense.payer===payment.to).map(expense=>{
+  const share=allocations(expense).find(item=>item.id===payment.from);
+  return {expense,limit:(share?.amount||0)-recordedSharePayment(book,expense,payment.from,payment.id)};
+ }).filter(item=>item.limit>0).sort((a,b)=>String(a.expense.date||'').localeCompare(String(b.expense.date||'')));
+}
+function availableExistingPayments(book,expense,memberId){
+ return book.settlements.filter(payment=>payment.from===memberId&&payment.to===expense.payer&&unassignedPayment(payment)>0);
+}
+function paymentCents(value){
+ const input=String(value??'').trim();
+ if(!/^[0-9]+(?:\.[0-9]{1,2})?$/.test(input))throw Error('請輸入有效金額，最多兩位小數。');
+ const [whole,fraction='']=input.split('.');
+ const cents=Number(whole)*100+Number(fraction.padEnd(2,'0'));
+ if(!Number.isSafeInteger(cents))throw Error('金額過大。');
+ return cents;
+}
+function repaymentChanges(book,payment,amount,date,requested){
+ if(!Number.isSafeInteger(amount)||amount<=0)throw Error('還款金額必須大於零。');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw Error('請選擇付款日期。');
+ const limits=new Map(availableRepaymentExpenses(book,payment).map(({expense,limit})=>[expense.id,limit]));
+ const seen=new Set();
+ let allocated=0;
+ for(const part of requested){
+  if(seen.has(part.expenseId)||!Number.isSafeInteger(part.amount)||part.amount<=0||part.amount>(limits.get(part.expenseId)||0))
+   throw Error('分配金額超過費用剩餘分攤，請重新確認。');
+  seen.add(part.expenseId);
+  allocated+=part.amount;
+  if(allocated>amount)throw Error('分配金額合計不可超過這筆還款。');
+ }
+ return {id:payment.id,from:payment.from,to:payment.to,amount,date,applications:requested};
 }
 
-function expenseShareRow(book, expense, share) {
+function expenseShareRow(book,expense,share){
  const isPayer=share.id===expense.payer;
- const remaining=share.amount-recordedSharePayment(book,expense,share.id);
- const status=isPayer?'已代墊':share.amount===0?'免付':remaining<=0?'已支付':remaining<share.amount?'部分已支付':'未記錄付款';
+ const paid=Math.min(share.amount,recordedSharePayment(book,expense,share.id));
+ const remaining=share.amount-paid;
  const complete=isPayer||remaining<=0;
- const action=complete?'':`<button type="button" class="quiet share-pay-action" data-pay-share="${esc(share.id)}">記錄已支付</button>`;
- return `<div class="person expense-share"><span class="detail">${esc(name(book,share.id))}<small class="share-status ${complete?'share-complete':''}">${status}</small></span><div class="share-amount"><span>NT$ ${money(share.amount)}</span>${action}</div></div>`;
+ const status=isPayer?'已代墊':share.amount===0?'免付':complete?'已支付':paid?'部分已支付':'未記錄付款';
+ const label=availableExistingPayments(book,expense,share.id).length?'關聯既有還款':'記錄付款';
+ const action=complete?'':`<button type="button" class="quiet share-pay-action" data-pay-share="${esc(share.id)}">${label}</button>`;
+ const partial=!complete&&paid?`<small>已付 NT$ ${money(paid)} · 剩 NT$ ${money(remaining)}</small>`:'';
+ return `<div class="person expense-share"><span class="detail">${esc(name(book,share.id))}<small class="share-status ${complete?'share-complete':''}">${status}</small>${partial}</span><div class="share-amount"><span>NT$ ${money(share.amount)}</span>${action}</div></div>`;
 }
 
-function confirmSharePayment(book, expense, memberId) {
+
+function openRepaymentEditor(book,payment,{existing=false,expenseId='',returnExpenseId=''}={}){
+ const choices=availableRepaymentExpenses(book,payment);
+ const direct=!!expenseId&&!existing;
+ const assigned=new Map(paymentApplications(payment).map(part=>[part.expenseId,part.amount]));
+ if(existing&&returnExpenseId){
+  const limit=choices.find(item=>item.expense.id===returnExpenseId)?.limit||0;
+  const already=assigned.get(returnExpenseId)||0;
+  const extra=Math.min(limit-already,unassignedPayment(payment));
+  if(extra>0)assigned.set(returnExpenseId,already+extra);
+ }
+ const rows=direct?'':choices.map(({expense,limit})=>`<label class="payment-allocation"><span>${esc(expense.title)}<small>${esc(expense.date||'')} · 可抵 NT$ ${money(limit)}</small></span><input type="number" name="apply-${esc(expense.id)}" aria-label="${esc(expense.title)} 抵扣金額" inputmode="decimal" min="0" step="0.01" value="${assigned.has(expense.id)?assigned.get(expense.id)/100:''}" placeholder="0"></label>`).join('');
+ const moneyField=field('repaymentAmount','實際付款金額（NT$）',payment.amount/100,'number','required min="0.01" step="0.01" inputmode="decimal"');
+ const dateField=field('repaymentDate','付款日期',payment.date||today(),'date','required');
+ const allocationFields=direct
+  ?'<p class="hint">此金額會直接抵扣這筆費用，可分次記錄。</p>'
+  :`<h3 class="settle-heading">抵扣費用</h3>${rows||'<p class="hint">目前沒有可關聯的費用。這筆款項會列入整本帳本還款。</p>'}${rows?'<button id="autoApplyPayment" type="button" class="quiet">按日期分配</button><p class="hint">可把一筆還款分到多筆費用。剩餘金額會保留為整本帳本還款。</p>':''}`;
+ modal(existing?'更正還款紀錄':'記錄付款',
+  `<p>${esc(name(book,payment.from))} → ${esc(name(book,payment.to))}</p>${moneyField}${dateField}${allocationFields}`,
+  existing?'儲存更正':'確認已付款',async form=>{
+   const latest=group();
+   if(latest?.id!==book.id)throw Error('帳本已切換，請重新開啟。');
+   const index=latest.settlements.findIndex(item=>item.id===payment.id);
+   if(existing&&(index<0||JSON.stringify(latest.settlements[index])!==JSON.stringify(payment)))throw Error('還款紀錄已更新，請重新開啟。');
+   if(!existing&&index>=0)throw Error('這筆付款已記錄，請重新開啟明細。');
+   const amount=paymentCents(form.get('repaymentAmount'));
+   if(!existing&&!direct){
+    const suggested=plan(latest).find(item=>item.from===payment.from&&item.to===payment.to);
+    if(amount>(suggested?.amount||0))throw Error('金額超過目前建議轉帳金額，請重新確認。');
+   }
+   if(direct){
+    const target=latest.expenses.find(item=>item.id===expenseId);
+    if(!target||target.payer!==payment.to)throw Error('費用已更新，請重新開啟。');
+    if(availableExistingPayments(latest,target,payment.from).length)throw Error('已有可抵扣的還款，請先在費用明細關聯既有還款。');
+   }
+   const applications=direct?[{expenseId,amount}]:choices.flatMap(({expense})=>{
+    const value=form.get('apply-'+expense.id);
+    const cents=value?paymentCents(value):0;
+    return cents?[{expenseId:expense.id,amount:cents}]:[];
+   });
+   const updated=repaymentChanges(latest,payment,amount,form.get('repaymentDate'),applications);
+   const next=structuredClone(latest);
+   if(existing)next.settlements[index]=updated;
+   else next.settlements.push(updated);
+   await commit(next);
+   toast(existing?'還款紀錄已更新':'付款已記錄');
+  },returnExpenseId?()=>showExpense(returnExpenseId):undefined);
+ const auto=$('autoApplyPayment');
+ if(auto)auto.onclick=()=>{
+  try{
+   let left=paymentCents($('f-repaymentAmount').value);
+   for(const {expense,limit} of choices){
+    const amount=Math.min(left,limit);
+    $('form').elements.namedItem('apply-'+expense.id).value=amount?amount/100:'';
+    left-=amount;
+   }
+   $('formError').textContent='';
+  }catch(error){$('formError').textContent=error.message}
+ };
+}
+
+function confirmSharePayment(book,expense,memberId){
  const share=allocations(expense).find(item=>item.id===memberId);
- const amount=(share?.amount||0)-recordedSharePayment(book,expense,memberId);
- if(memberId===expense.payer||amount<=0)return;
- modal('確認這筆已支付',`<p>${esc(name(book,memberId))} 已付給 ${esc(name(book,expense.payer))} <strong>NT$ ${money(amount)}</strong></p><p class="hint">這筆會列入分帳結算。若這筆款項已記錄在還款紀錄，請勿重複記錄。</p>`,'確認已支付',async()=>{
-  const latest=group();
-  const current=latest?.expenses.find(item=>item.id===expense.id);
-  if(latest?.id!==book.id||!current||current.payer!==expense.payer)throw Error('費用已更新，請重新開啟明細');
-  const currentShare=allocations(current).find(item=>item.id===memberId);
-  if(!currentShare||currentShare.amount-recordedSharePayment(latest,current,memberId)!==amount)throw Error('分攤或付款已更新，請重新開啟明細');
-  const next=structuredClone(latest);
-  next.settlements.push({from:memberId,to:current.payer,amount,id:uid(),date:today(),expenseId:current.id});
-  await commit(next);
-  toast('已記錄這筆費用的付款');
- },()=>showExpense(expense.id));
+ const remaining=(share?.amount||0)-recordedSharePayment(book,expense,memberId);
+ if(memberId===expense.payer||remaining<=0)return;
+ const candidates=availableExistingPayments(book,expense,memberId);
+ if(!candidates.length){
+  openRepaymentEditor(book,{id:uid(),from:memberId,to:expense.payer,amount:remaining,date:today()},{expenseId:expense.id,returnExpenseId:expense.id});
+  return;
+ }
+ const rows=candidates.map(payment=>`<button type="button" class="quiet repayment-link-choice" data-link-payment="${esc(payment.id)}">${esc(payment.date||'未記錄日期')} · 可抵 NT$ ${money(unassignedPayment(payment))}</button>`).join('');
+ modal('關聯既有還款',`<p>${esc(name(book,memberId))} → ${esc(name(book,expense.payer))}</p><p class="hint">選擇已記錄的還款來抵扣「${esc(expense.title)}」。儲存後會更新這筆還款的費用分配。</p>${rows}`,'返回費用',async()=>{},()=>showExpense(expense.id));
+ $('fields').querySelectorAll('[data-link-payment]').forEach(button=>{
+  button.onclick=()=>{
+   const payment=candidates.find(item=>item.id===button.dataset.linkPayment);
+   if(payment)openRepaymentEditor(book,payment,{existing:true,returnExpenseId:expense.id});
+  };
+ });
 }
 
-function showExpense(id){const g=group(),e=g?.expenses.find(x=>x.id===id);if(!e)return;modal(e.title,`<div class="expense-info"><p>消費日期：${esc(e.date)}</p><p>付款人：${esc(name(g,e.payer))}</p><p>原幣金額：${esc(e.currency)} ${esc(e.amount)}</p><p>匯率：<span class="exchange-ratio">1 ${esc(e.currency)} = ${esc(e.rate)} TWD</span></p><p><strong>總額：NT$ ${money(e.baseCents)}</strong></p><h3>收據／照片</h3><div id="expensePhotoPreview" class="expense-photo-preview"><p class="hint">圖片載入中…</p></div><h3>分攤明細</h3><p class="hint">顯示這筆費用的付款紀錄。整本帳本的還款請到分帳結算查看。</p>${allocations(e).map(a=>expenseShareRow(g,e,a)).join('')}<div class="expense-detail-actions single-action"><button type="button" class="quiet" id="detailEdit">編輯費用</button></div></div>`,'關閉',async()=>{});loadExpensePhotos(g.id,id,$('expensePhotoPreview'));$('detailEdit').onclick=()=>editExpense(id);$('fields').querySelectorAll('[data-pay-share]').forEach(button=>{button.onclick=()=>confirmSharePayment(g,e,button.dataset.payShare)})}
+function undoRepayment(book,paymentId){
+ const payment=book.settlements.find(item=>item.id===paymentId);
+ if(!payment)return;
+ const affected=paymentApplications(payment).map(part=>`<li>${esc(book.expenses.find(expense=>expense.id===part.expenseId)?.title||'指定費用')} · NT$ ${money(part.amount)}</li>`).join('');
+ modal('撤銷還款紀錄',
+  `<p>${esc(name(book,payment.from))} → ${esc(name(book,payment.to))} <strong>NT$ ${money(payment.amount)}</strong></p><p class="hint">撤銷後會重新計算兩人的餘額。${affected?'以下費用也會重新計算已付金額。':''}</p>${affected?'<ul>'+affected+'</ul>':''}`,
+  '撤銷紀錄',async()=>{
+   const latest=group();
+   const current=latest?.settlements.find(item=>item.id===paymentId);
+   if(latest?.id!==book.id||JSON.stringify(current)!==JSON.stringify(payment))throw Error('還款紀錄已更新，請重新開啟。');
+   const next=structuredClone(latest);
+   next.settlements=next.settlements.filter(item=>item.id!==paymentId);
+   await commit(next);
+  });
+}
+function showExpense(id){const g=group(),e=g?.expenses.find(x=>x.id===id);if(!e)return;modal(e.title,`<div class="expense-info"><p>消費日期：${esc(e.date)}</p><p>付款人：${esc(name(g,e.payer))}</p><p>原幣金額：${esc(e.currency)} ${esc(e.amount)}</p><p>匯率：<span class="exchange-ratio">1 ${esc(e.currency)} = ${esc(e.rate)} TWD</span></p><p><strong>總額：NT$ ${money(e.baseCents)}</strong></p><h3>收據／照片</h3><div id="expensePhotoPreview" class="expense-photo-preview"><p class="hint">圖片載入中…</p></div><h3>分攤明細</h3><p class="hint">可分次記錄付款，或關聯同一付款人已記錄的還款。</p>${allocations(e).map(a=>expenseShareRow(g,e,a)).join('')}<div class="expense-detail-actions single-action"><button type="button" class="quiet" id="detailEdit">編輯費用</button></div></div>`,'關閉',async()=>{});loadExpensePhotos(g.id,id,$('expensePhotoPreview'));$('detailEdit').onclick=()=>editExpense(id);$('fields').querySelectorAll('[data-pay-share]').forEach(button=>{button.onclick=()=>confirmSharePayment(g,e,button.dataset.payShare)})}
 
 function briefMoney(cents){return new Intl.NumberFormat('zh-TW',{minimumFractionDigits:0,maximumFractionDigits:2}).format(cents/100)}
 
