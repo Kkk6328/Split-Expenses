@@ -235,3 +235,15 @@ input[type=date]::-webkit-date-and-time-value{text-align:left;min-width:0}
 .payment-allocation{display:grid;grid-template-columns:minmax(0,1fr) minmax(94px,38%);align-items:center;gap:10px;margin:8px 0}
 .payment-allocation small{display:block;color:var(--muted)}
 .repayment-link-choice{display:block;width:100%;margin:8px 0}
+
+@media(max-width:760px){
+ .has-books aside{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;padding:0 16px 8px}
+ .has-books .mobile-book-switch{min-width:0;gap:6px}
+ .has-books .mobile-book-switch label{display:none}
+ .has-books .mobile-book-switch select{height:44px;min-height:44px;padding:0 8px;text-overflow:ellipsis}
+ .has-books .mobile-book-switch button{min-height:44px;padding:0 8px}
+ .has-books .side-tools{position:relative;margin:0}
+ .has-books .side-tools>summary{display:flex;align-items:center;gap:4px;min-height:44px;padding:0 8px;border:1px solid var(--line);background:#fff;white-space:nowrap}
+ .has-books .side-tools>div{position:absolute;z-index:10;top:calc(100% + 4px);right:0;display:grid;min-width:156px;padding:5px;border:1px solid var(--line);border-radius:9px;background:#fff;box-shadow:0 5px 14px #182b4520}
+ .has-books .side-tools>div button{min-height:44px;white-space:nowrap}
+}
