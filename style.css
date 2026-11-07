@@ -11,8 +11,7 @@ button.danger:hover{background:#fff5f5}
 a{color:var(--green)}p{line-height:1.8;color:var(--muted)}
 header{max-width:1180px;margin:auto;padding:24px 28px;display:flex;justify-content:space-between;align-items:center;gap:16px}
 .brand{display:flex;gap:10px;align-items:center;text-decoration:none;color:var(--ink)}
-.brand span{font-size:21px;font-weight:700}.brand small{display:block;font-size:11px;font-weight:400;letter-spacing:.5px;color:var(--muted)}
-.brand-mark{width:36px;height:36px;display:grid;place-items:center;background:var(--green);color:white;border-radius:9px;font-size:26px!important;font-weight:400!important}
+.brand span{font-size:21px;font-weight:700;letter-spacing:.04em}.brand small{display:block;font-size:11px;font-weight:400;letter-spacing:.5px;color:var(--muted)}
 header>div{display:flex;gap:8px;align-items:center;justify-content:flex-end}header button{font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill{background:var(--soft);border-radius:20px;padding:5px 10px;font-size:11px;white-space:nowrap}
 main{max-width:1124px;margin:auto}.welcome{display:flex;gap:24px;align-items:center;justify-content:space-between;padding:24px 28px;background:white;border:1px solid var(--line);border-radius:14px}
@@ -62,7 +61,7 @@ label.check input{width:18px;min-height:18px;height:18px;margin:0;accent-color:v
 #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:max-content;max-width:min(440px,calc(100vw - 32px));background:#253342;color:white;box-shadow:0 5px 20px #25334226;padding:12px 18px;border-radius:10px;display:none;z-index:20;font-size:13px;line-height:1.6;text-align:center}
 .settle-heading{font-size:14px;margin:24px 0 8px}.positive{color:#37665d}.negative{color:#a15c36}
 @media(max-width:760px){
- header{padding:16px;gap:12px}.brand small{font-size:10px}.brand span{font-size:19px}.brand-mark{width:32px;height:32px}.pill{display:none}header button{font-size:12px;padding:8px 10px;max-width:145px}
+ header{padding:16px;gap:12px}.brand small{font-size:10px}.brand span{font-size:19px}.pill{display:none}header button{font-size:12px;padding:8px 10px;max-width:145px}
  main{padding:0 12px}.welcome{padding:18px;gap:14px;align-items:flex-start}.welcome h1{font-size:20px}.welcome p{font-size:12px}.welcome .eyebrow{display:none}.welcome button{font-size:12px;padding:9px 12px}
  .workspace{display:block;margin:16px 0 32px}aside{position:relative;padding:0 0 16px}.aside-title{font-size:12px;margin:0 4px 10px}
  #groups{display:flex;gap:8px;overflow:auto;scrollbar-width:thin;padding-bottom:4px}.group{min-width:150px;max-width:240px;width:auto;flex-shrink:0;border:1px solid var(--line);background:white}.group.selected{background:#e3ebf3;border-color:#c9d5e1}
