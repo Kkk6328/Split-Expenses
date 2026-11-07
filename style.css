@@ -199,3 +199,17 @@ input[type=date]::-webkit-date-and-time-value{text-align:left;min-width:0}
 .repayment-group .transfer{padding:10px 0;margin:0 0 0 8px}
 
 .repayment-section-title{margin:0;font-size:14px}.repayment-section-title small{font-weight:400;padding-right:19px}
+
+.balance-board{margin:0 0 20px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.balance-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-height:54px}
+.balance-row+.balance-row{border-top:1px solid var(--line)}
+.balance-person{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;padding:8px}
+.balance-name{min-width:0;overflow-wrap:anywhere}
+.balance-person .avatar{width:32px;height:32px}
+.balance-amount{border:0;border-radius:0;padding:8px;text-align:left;overflow-wrap:anywhere;font-size:15px;font-weight:650;font-variant-numeric:tabular-nums;background:#eef7f0;color:#215b34}
+.balance-amount:focus-visible{outline-offset:-3px}
+.balance-owed .balance-person{grid-column:2;grid-row:1;flex-direction:row-reverse;justify-content:flex-end}
+.balance-owed .balance-amount{grid-column:1;grid-row:1;text-align:right;background:#fceceb;color:#982f31}
+.balance-even .balance-amount{background:#f4f6f8;color:#466152}
+.balance-detail-row strong,.balance-detail-total strong{font-variant-numeric:tabular-nums;text-align:right}
+.balance-detail-total{display:flex;justify-content:space-between;gap:12px;padding:14px 0 4px;font-weight:650}
