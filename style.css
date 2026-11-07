@@ -187,13 +187,15 @@ input[type=date]::-webkit-date-and-time-value{text-align:left;min-width:0}
 .expense-share .share-pay-action{font-size:12px;padding:6px 10px}
 
 .repayment-history{margin-top:24px;border:1px solid var(--line);border-radius:12px;background:#fff}
-.repayment-history>summary,.repayment-group>summary{display:flex;align-items:center;gap:10px;padding:12px;list-style:none;min-height:44px}
+.repayment-section-title,.repayment-group>summary{display:flex;align-items:center;gap:10px;padding:12px;list-style:none;min-height:44px}
 .repayment-history summary::-webkit-details-marker{display:none}
 .repayment-history summary::after{content:'';width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);flex-shrink:0;margin:0 4px 3px}
-.repayment-history[open]>summary::after,.repayment-group[open]>summary::after{transform:rotate(225deg);margin-bottom:-3px}
+.repayment-group[open]>summary::after{transform:rotate(225deg);margin-bottom:-3px}
 .repayment-label{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:600}
-.repayment-history summary small{color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.repayment-section-title small,.repayment-group summary small{color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
 .repayment-groups{padding:0 12px 8px}
 .repayment-group{border-top:1px solid var(--line)}
 .repayment-group>summary{padding:10px 0}
 .repayment-group .transfer{padding:10px 0;margin:0 0 0 8px}
+
+.repayment-section-title{margin:0;font-size:14px}.repayment-section-title small{font-weight:400;padding-right:19px}
