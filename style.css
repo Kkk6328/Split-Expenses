@@ -77,3 +77,11 @@ label.check input{width:18px;min-height:18px;height:18px;margin:0;accent-color:v
 }
 @media(max-width:380px){.welcome{display:block}.welcome button{margin-top:14px}.stats strong{font-size:17px}.book{padding:16px 12px}.book-head h2{font-size:19px}.book-head button{font-size:11px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+
+
+.expense-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.photo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}
+.photo-card{min-width:0;display:grid;gap:8px}.photo-card img{display:block;width:100%;height:140px;object-fit:contain;border:1px solid #dce2e8;border-radius:8px;background:white}.photo-card button{width:100%}
+.payment-qr{display:block;width:100%;max-width:360px;height:auto;margin:20px auto;border:1px solid #dce2e8;border-radius:12px}.payment-link{display:block;padding:14px 18px;background:#344b63;color:white;text-align:center;border-radius:10px;text-decoration:none;overflow-wrap:anywhere}
+#photoInput{width:100%;font-size:16px}#photoEditor .hint{margin:12px 0}
+@media(max-width:600px){.expense-actions{width:100%;justify-content:flex-end}.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.photo-card img{height:150px}.transfer{flex-wrap:wrap;gap:12px}}
