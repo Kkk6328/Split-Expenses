@@ -87,3 +87,39 @@ label.check input{width:18px;min-height:18px;height:18px;margin:0;accent-color:v
 @media(max-width:600px){.expense-actions{width:100%;justify-content:flex-end}.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.photo-card img{height:150px}.transfer{flex-wrap:wrap;gap:12px}}
 
 .expense-day+.expense-day{margin-top:28px}.day-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;background:var(--soft);border-radius:10px}.day-heading h3{font-size:16px;margin:0;color:var(--ink)}.day-heading span{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* Focused mobile workspace */
+.mobile-book-switch{display:none}
+@media(max-width:760px){
+ body{font-size:16px;background:#f5f7fa}
+ header{padding:14px 18px}.brand small{display:none}.brand span{font-size:21px}header button{font-size:13px}
+ .has-books .welcome{display:none}
+ main{padding:0}.welcome{margin:0 16px}
+ .workspace{margin:4px 0 24px}
+ aside{padding:0 16px 12px}
+ .has-books .mobile-book-switch{display:flex;align-items:center;gap:8px}
+ .mobile-book-switch label{margin:0;font-size:13px;color:var(--muted);white-space:nowrap}
+ .mobile-book-switch select{flex:1;min-width:0;width:auto;font-size:16px;font-weight:600;background:#fff}
+ .mobile-book-switch button{font-size:13px;padding:8px 12px;white-space:nowrap}
+ .has-books .aside-title,.has-books #groups{display:none}
+ .side-tools{margin-top:4px}.side-tools>summary{padding:8px 0;font-size:12px;min-height:36px}
+ .book{border:0;border-radius:0;padding:24px 20px;min-height:420px}
+ .book-head{align-items:center;margin-bottom:20px}.book-head h2{font-size:26px;margin:0}
+ #bookMeta{display:none}.book-head button{font-size:13px}
+ #invite{background:#eef2f6;color:var(--green);border-color:#e2e8ef}
+ .stats{grid-template-columns:1fr 1fr;background:transparent;padding:0;gap:12px;margin-bottom:24px}
+ .stats>div:first-child{grid-column:1/-1;padding-bottom:14px;border-bottom:1px solid var(--line)}
+ .stats>div+div{padding:0;border:0;display:flex;align-items:baseline;gap:8px}
+ .stats small{font-size:13px}.stats strong{font-size:17px;margin:0}
+ .stats>div:first-child strong{font-size:32px;letter-spacing:-.8px;margin-top:4px;line-height:1.4}
+ nav{gap:4px;justify-content:initial}nav button{flex:1;font-size:15px;min-height:50px}
+ .toolbar{font-size:13px;padding:18px 0 8px}.toolbar button{font-size:14px}
+ .person{padding:18px 0;gap:16px;font-size:16px}.person .positive,.person .negative{font-size:15px;text-align:right;font-variant-numeric:tabular-nums}
+ .positive{color:#326b61}.negative{color:#66513f}
+ .detail small,.amount small{font-size:12px}.transfer{font-size:16px;padding:18px 0}.transfer button{font-size:13px;min-height:44px}
+ .settle-heading{font-size:17px;margin:28px 0 8px}
+ .expense .detail strong{font-size:16px}.expense .amount{font-size:17px}.expense .amount small{font-size:12px;display:block;margin:3px 0 0}
+ .expense-actions button{font-size:13px;min-height:44px}
+ .book-footer{font-size:12px}footer{margin:0 20px}
+ .day-heading h3{font-size:15px}.day-heading span{font-size:12px}
+}
