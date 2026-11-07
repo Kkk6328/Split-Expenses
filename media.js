@@ -37,14 +37,17 @@ async function openExpenseImages(bookId,expenseId){
 }
 
 async function copyBank(value,status){try{await navigator.clipboard.writeText(value);status.textContent='已複製：'+value}catch{status.textContent='無法自動複製，請長按上方欄位複製。'}}
+function normalizeBankAccount(value){
+ return value.replace(/[０-９]/g,digit=>String.fromCharCode(digit.charCodeAt(0)-0xfee0)).replace(/[\s\-－]/g,'');
+}
 async function openPayment(bookId,memberId){
  try{const cap=await api('capabilities');if(cap.paymentVersion!==2)throw Error('多組銀行帳號功能尚未啟用，請先更新 Cloudflare Worker。');
  const g=group();if(!g||g.id!==bookId)return;const m=g.members.find(m=>m.id===memberId);if(!m)throw Error('請先配對自己的成員身分');
  const data=await api('getPayment',{groupId:bookId,memberId});if(group()?.id!==bookId)return;
  const user=window.WarmCloud?.user()?.uid,own=m.id===user||m.lineUserId===user;
  let accounts=(data.accounts||[]).map(x=>({...x}));
- modal(own?'我的收款帳號':m.name+' 的收款帳號','<p class="hint">'+(own?'搜尋並選擇銀行，或直接輸入 3 碼代碼。名稱會自動帶入；可設定多組帳號。':'選擇收款帳號，複製銀行碼與帳號後至銀行 App 轉帳。請核對收款人。')+'</p><div id="bankAccounts"></div>'+(own?'<button type="button" id="addBank" class="quiet bank-add">＋ 新增銀行帳號</button>':'')+'<p class="hint" id="bankStatus" role="status"></p>',own?'儲存收款帳號':'關閉',async()=>{if(!own)return;collect();for(const x of accounts)if(!/^\\d{3}$/.test(x.bankCode)||!/^\\d{5,20}$/.test(x.account))throw Error('銀行碼須為 3 碼，帳號須為 5～20 位數字');await api('savePayment',{groupId:bookId,memberId,accounts,revision:data.revision});toast('收款帳號已儲存')});
- function collect(){if(own)accounts=[...$('bankAccounts').children].filter(x=>x.classList.contains('bank-card')).map(card=>({name:bankName(card.querySelector('[data-bank-code]').value.trim()),bankCode:card.querySelector('[data-bank-code]').value.trim(),account:card.querySelector('[data-bank-account]').value.replace(/[ -]/g,'')}))}
+ modal(own?'我的收款帳號':m.name+' 的收款帳號','<p class="hint">'+(own?'搜尋並選擇銀行，或直接輸入 3 碼代碼。名稱會自動帶入；可設定多組帳號。':'選擇收款帳號，複製銀行碼與帳號後至銀行 App 轉帳。請核對收款人。')+'</p><div id="bankAccounts"></div>'+(own?'<button type="button" id="addBank" class="quiet bank-add">＋ 新增銀行帳號</button>':'')+'<p class="hint" id="bankStatus" role="status"></p>',own?'儲存收款帳號':'關閉',async()=>{if(!own)return;collect();for(const [i,x] of accounts.entries()){if(!/^[0-9]{3}$/.test(x.bankCode))throw Error('第 '+(i+1)+' 組：請選擇銀行或輸入 3 碼銀行代碼');if(!/^[0-9]{5,20}$/.test(x.account))throw Error('第 '+(i+1)+' 組：銀行帳號須為 5～20 位數字');}await api('savePayment',{groupId:bookId,memberId,accounts,revision:data.revision});toast('收款帳號已儲存')});
+ function collect(){if(own)accounts=[...$('bankAccounts').children].filter(x=>x.classList.contains('bank-card')).map(card=>({name:bankName(card.querySelector('[data-bank-code]').value.trim()),bankCode:card.querySelector('[data-bank-code]').value.trim(),account:normalizeBankAccount(card.querySelector('[data-bank-account]').value)}))}
  function draw(){const host=$('bankAccounts');host.replaceChildren();if(!accounts.length&&!own){host.textContent='此成員尚未設定銀行帳號。';return}
  accounts.forEach((x,i)=>{const card=document.createElement('section');card.className='bank-card';
 
@@ -56,7 +59,7 @@ async function openPayment(bookId,memberId){
  search.oninput=options;code.oninput=()=>{code.value=code.value.replace(/[^0-9]/g,'');heading.textContent=bankName(code.value)||'自行輸入銀行代碼';select.value=[...select.options].some(o=>o.value===code.value)?code.value:'manual'};options();
  }
  card.querySelector('[data-copy-code]').onclick=()=>copyBank(card.querySelector('[data-bank-code]').value.trim(),$('bankStatus'));
- card.querySelector('[data-copy-account]').onclick=()=>copyBank(card.querySelector('[data-bank-account]').value.replace(/[ -]/g,''),$('bankStatus'));
+ card.querySelector('[data-copy-account]').onclick=()=>copyBank(normalizeBankAccount(card.querySelector('[data-bank-account]').value),$('bankStatus'));
  if(own){const remove=photoButton('移除此帳號',()=>{collect();accounts.splice(i,1);draw()});remove.classList.add('photo-remove');card.append(remove)}host.append(card)});
  if(own)$('addBank').disabled=accounts.length>=10;
  }
