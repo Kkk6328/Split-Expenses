@@ -137,3 +137,20 @@ dialog.photo-viewer{width:900px;max-width:calc(100vw - 20px);padding:16px}
 .photo-viewer-area img{display:block;max-width:100%;max-height:65dvh;object-fit:contain;margin:auto;cursor:zoom-in}
 .photo-viewer-area img.original{max-width:none;max-height:none;cursor:zoom-out}
 .photo-viewer .hint{margin:10px 0 0;font-size:13px}
+
+/* Compact date-grouped expense list */
+.expense-day+.expense-day{margin-top:12px}
+.day-heading{border-radius:0;padding:7px 10px;background:#f1f3f5;gap:4px}
+.day-heading h3{font-size:13px;font-weight:400;color:var(--muted)}
+.day-heading span{font-size:11px}
+button.expense-summary{width:100%;display:flex;flex-wrap:nowrap;gap:12px;padding:14px 4px;min-height:74px;background:white;border:0;border-bottom:1px solid #edf0f3;border-radius:0;text-align:left;color:var(--ink);font-weight:400}
+button.expense-summary:hover{background:#f8fafc;filter:none}
+.expense-summary .icon{background:transparent;width:32px;height:36px;font-size:24px}
+.expense-summary .detail{flex:1;flex-basis:auto;min-width:0}
+.expense-summary .detail strong{display:block;font-size:16px;font-weight:500}
+.expense-summary .detail small{font-size:12px;margin-top:3px}
+.expense-summary .amount{flex:0 0 auto;margin:0;text-align:right;font-size:17px;font-weight:500;color:var(--ink)}
+.expense-summary .amount small{display:block;margin:0 0 2px;font-size:10px;font-weight:400;color:var(--muted)}
+.expense-detail-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}.expense-detail-actions button{flex:1}
+.expense-info p{margin:8px 0}.expense-info h3{font-size:15px;margin:20px 0 4px}
+@media(max-width:380px){button.expense-summary{gap:8px}.expense-summary .amount{font-size:15px}.day-heading span{font-size:10px}}
