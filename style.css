@@ -162,3 +162,8 @@ button.expense-summary:hover{background:#f8fafc;filter:none}
 .shared-expense .paid-total{display:block;margin-top:2px;font-size:15px;font-variant-numeric:tabular-nums}.shared-expense .amount{align-self:flex-end;margin-bottom:0}.shared-expense .amount small{font-size:12px;margin-bottom:4px}.shared-expense .detail strong{margin-bottom:5px}
 
 .bank-card .bank-auto-name{font-size:16px;margin:0 0 12px}.bank-card .bank-search{margin-bottom:8px;font-size:16px}.bank-card .bank-select{font-size:16px;width:100%;margin-bottom:8px}.bank-card .bank-copy-row input{font-size:16px}
+
+.expense-detail-actions{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:8px}
+.expense-detail-actions button{min-width:0;white-space:nowrap;font-size:14px;padding:10px 8px}
+.exchange-ratio{display:inline-block;font-variant-numeric:tabular-nums}
+@media(max-width:340px){.expense-detail-actions{grid-template-columns:1fr}.expense-detail-actions button{width:100%}}
