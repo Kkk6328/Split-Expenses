@@ -160,3 +160,5 @@ button.expense-summary:hover{background:#f8fafc;filter:none}
 .expense-summary .amount.payable{color:#cf554f}.expense-summary .amount.receivable{color:#326b61}.expense-summary .amount.none{color:var(--muted)}
 
 .shared-expense .paid-total{display:block;margin-top:2px;font-size:15px;font-variant-numeric:tabular-nums}.shared-expense .amount{align-self:flex-end;margin-bottom:0}.shared-expense .amount small{font-size:12px;margin-bottom:4px}.shared-expense .detail strong{margin-bottom:5px}
+
+.bank-card .bank-auto-name{font-size:16px;margin:0 0 12px}.bank-card .bank-search{margin-bottom:8px;font-size:16px}.bank-card .bank-select{font-size:16px;width:100%;margin-bottom:8px}.bank-card .bank-copy-row input{font-size:16px}
