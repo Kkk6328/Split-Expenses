@@ -8,7 +8,35 @@ function persist(){localStorage.setItem(storageKey,JSON.stringify(state))}
 function showAuthRecovery(message){const box=$('formError');box.textContent=message;const button=document.createElement('button');button.type='button';button.className='quiet';button.textContent='重新登入 LINE';button.onclick=()=>window.WarmCloud.reconnect().catch(e=>{box.textContent=e.message});box.append(document.createElement('br'),button)}
 async function api(action,data={}){if(!window.WarmCloud)throw Error('雲端模組尚未載入，請稍後再試');try{return await window.WarmCloud.api(action,data)}catch(e){if(e.code==='resource-exhausted')throw Error('今日免費額度已用完，請稍後再試；不會自動收費');if(e.code==='permission-denied')throw Error('沒有權限，或 Firebase 共用規則尚未發布');throw e}}
 async function save(g){if(g.cloud){if(!cloud())throw Error(cfg.lineApiBase?'請先登入 LINE 再更新共用帳本':'請先登入 Google 再更新共用帳本');const r=await api('save',{group:g,version:g.version});Object.assign(g,r.group)}persist();render()}
-function modal(title,html,submit,callback){$('dialogTitle').textContent=title;$('fields').innerHTML=html;$('submit').textContent=submit;$('formError').textContent='';$('form').onsubmit=async e=>{e.preventDefault();$('submit').disabled=true;try{await callback(new FormData($('form')));$('modal').close()}catch(e){if(e.code==='line-auth')showAuthRecovery(e.message);else $('formError').textContent=e.message}finally{$('submit').disabled=false}};$('modal').showModal()}
+function modal(title,html,submit,callback,onSaved){
+ const dialog=$('modal'),form=$('form'),button=$('submit');
+ $('dialogTitle').textContent=title;
+ $('fields').innerHTML=html;
+ button.textContent=submit;
+ $('formError').textContent='';
+ const submitForm=async event=>{
+  event.preventDefault();
+  if(button.disabled)return;
+  button.disabled=true;
+  const isCurrent=()=>dialog.open&&form.onsubmit===submitForm;
+  try{
+   await callback(new FormData(form));
+   if(isCurrent()){
+    if(onSaved)onSaved();
+    else dialog.close();
+   }
+  }catch(error){
+   if(isCurrent()){
+    if(error.code==='line-auth')showAuthRecovery(error.message);
+    else $('formError').textContent=error.message;
+   }
+  }finally{
+   button.disabled=false;
+  }
+ };
+ form.onsubmit=submitForm;
+ dialog.showModal();
+}
 const field=(name,label,value='',type='text',extra='')=>`<label for="f-${name}">${label}</label><input id="f-${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}>`;
 function newGroup(){let draft=null;try{draft=JSON.parse(sessionStorage.getItem('split-create-draft'))}catch{}const owner=window.WarmCloud?.user()?.uid;if(cfg.lineApiBase&&!cloud()){window.WarmCloud?.login().catch(e=>toast(e.message));return}modal('建立帳本',field('name','帳本名稱',draft&&draft.owner===owner?draft.name:'','text','required maxlength="60" placeholder="例如：首爾旅行"')+(cfg.lineApiBase?'<p class="hint">建立後自動加入你的 LINE 帳號，其他成員須透過此帳本的邀請連結加入。</p>':field('members','成員暱稱（用逗號分開）',profile?.displayName||'我','text','required maxlength="300" placeholder="喬喬、小安"'))+'<p class="hint">結算幣別：TWD 新台幣。每筆外幣費用都可以輸入自己的匯率。</p>','建立帳本',async f=>{if(cfg.lineApiBase&&!cloud())throw Object.assign(Error('請重新登入 LINE，再建立帳本。'),{code:'line-auth'});const names=cfg.lineApiBase?[(window.WarmCloud.user().displayName||'LINE 成員').slice(0,40)]:[...new Set(f.get('members').split(/[,，、]/).map(s=>s.trim()).filter(Boolean))];if(!names.length||names.length>30||names.some(n=>n.length>40))throw Error('請輸入 1～30 位成員');let g={id:uid(),name:f.get('name').trim(),members:names.map(name=>({id:cfg.lineApiBase?window.WarmCloud.user().uid:uid(),name})),expenses:[],settlements:[],created:today(),cloud:false};if(!g.name)throw Error('請填寫帳本名稱');if(cloud()){const r=await api('create',{group:g});g=r.group}state.groups.push(g);state.current=g.id;persist();render();toast('帳本已建立');try{sessionStorage.removeItem('split-create-draft')}catch{}});$('f-name').oninput=()=>{try{sessionStorage.setItem('split-create-draft',JSON.stringify({owner,name:$('f-name').value}))}catch{}}}
 function allocations(e){const total=e.baseCents,n=e.split.length,q=Math.floor(total/n),r=total%n;return e.split.map((id,i)=>({id,amount:q+(i<r?1:0)}))}
@@ -76,7 +104,7 @@ function confirmSharePayment(book, expense, memberId) {
   next.settlements.push({from:memberId,to:current.payer,amount,id:uid(),date:today(),expenseId:current.id});
   await commit(next);
   toast('已記錄這筆費用的付款');
- });
+ },()=>showExpense(expense.id));
 }
 
 function showExpense(id){const g=group(),e=g?.expenses.find(x=>x.id===id);if(!e)return;modal(e.title,`<div class="expense-info"><p>消費日期：${esc(e.date)}</p><p>付款人：${esc(name(g,e.payer))}</p><p>原幣金額：${esc(e.currency)} ${esc(e.amount)}</p><p>匯率：<span class="exchange-ratio">1 ${esc(e.currency)} = ${esc(e.rate)} TWD</span></p><p><strong>總額：NT$ ${money(e.baseCents)}</strong></p><h3>收據／照片</h3><div id="expensePhotoPreview" class="expense-photo-preview"><p class="hint">圖片載入中…</p></div><h3>分攤明細</h3><p class="hint">顯示這筆費用的付款紀錄。整本帳本的還款請到分帳結算查看。</p>${allocations(e).map(a=>expenseShareRow(g,e,a)).join('')}<div class="expense-detail-actions single-action"><button type="button" class="quiet" id="detailEdit">編輯費用</button></div></div>`,'關閉',async()=>{});loadExpensePhotos(g.id,id,$('expensePhotoPreview'));$('detailEdit').onclick=()=>editExpense(id);$('fields').querySelectorAll('[data-pay-share]').forEach(button=>{button.onclick=()=>confirmSharePayment(g,e,button.dataset.payShare)})}
