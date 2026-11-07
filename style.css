@@ -213,3 +213,9 @@ input[type=date]::-webkit-date-and-time-value{text-align:left;min-width:0}
 .balance-even .balance-amount{background:#f4f6f8;color:#466152}
 .balance-detail-row strong,.balance-detail-total strong{font-variant-numeric:tabular-nums;text-align:right}
 .balance-detail-total{display:flex;justify-content:space-between;gap:12px;padding:14px 0 4px;font-weight:650}
+
+.balance-date-section{margin-top:12px}
+.balance-date-section:first-child{margin-top:0}
+.balance-date-section .balance-detail-row{padding:10px 0;gap:10px}
+.balance-date-section .balance-detail-row strong{flex-shrink:0}
+.balance-date-section .repayment-groups>.hint{margin:0;padding:8px 0}

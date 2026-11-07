@@ -47,16 +47,16 @@ function balanceItems(book){
  for(const expense of book.expenses){
   const shares=allocations(expense);
   const own=shares.find(share=>share.id===expense.payer)?.amount||0;
-  items.get(expense.payer).push({title:expense.title,date:expense.date,description:'代墊總額扣除自己的分攤',amount:expense.baseCents-own});
+  items.get(expense.payer).push({kind:'expense',title:expense.title,date:expense.date,description:'代墊總額扣除自己的分攤',amount:expense.baseCents-own});
   for(const share of shares){
-   if(share.id!==expense.payer)items.get(share.id).push({title:expense.title,date:expense.date,description:'分攤費用',amount:-share.amount});
+   if(share.id!==expense.payer)items.get(share.id).push({kind:'expense',title:expense.title,date:expense.date,description:'分攤費用',amount:-share.amount});
   }
  }
  for(const payment of book.settlements){
   const title=titles.get(payment.expenseId);
   const suffix=title?' · '+title:'';
-  items.get(payment.from).push({title:'已還款'+suffix,date:payment.date,description:'付給 '+name(book,payment.to),amount:payment.amount});
-  items.get(payment.to).push({title:'已收款'+suffix,date:payment.date,description:'收到 '+name(book,payment.from)+' 的還款',amount:-payment.amount});
+  items.get(payment.from).push({kind:'payment',title:'已還款'+suffix,date:payment.date,description:'付給 '+name(book,payment.to),amount:payment.amount});
+  items.get(payment.to).push({kind:'payment',title:'已收款'+suffix,date:payment.date,description:'收到 '+name(book,payment.from)+' 的還款',amount:-payment.amount});
  }
  return items;
 }
@@ -78,16 +78,43 @@ function balanceRows(book,totals){
   </div>`;
  }).join('');
 }
+
+function balanceDetailSection(title,items){
+ const byDate=new Map();
+ let total=0;
+ for(const item of items){
+  const date=item.date||'';
+  if(!byDate.has(date))byDate.set(date,{items:[],total:0});
+  const day=byDate.get(date);
+  day.items.push(item);
+  day.total+=item.amount;
+  total+=item.amount;
+ }
+ const dates=[...byDate].sort(([a],[b])=>b.localeCompare(a)).map(([date,day])=>`
+  <details class="repayment-group">
+   <summary><span class="repayment-label">${esc(date||'未記錄日期')}</span><small>${day.items.length} 筆 · ${signedBalance(day.total)}</small></summary>
+   ${day.items.map(item=>`<div class="person balance-detail-row"><span class="detail">${esc(item.title)}<small>${esc(item.description)}</small></span><strong>${signedBalance(item.amount)}</strong></div>`).join('')}
+  </details>`).join('');
+ return `<section class="repayment-history balance-date-section">
+  <h3 class="repayment-section-title"><span class="repayment-label">${title}</span><small>${signedBalance(total)}</small></h3>
+  <div class="repayment-groups">${dates||'<p class="hint">目前沒有紀錄</p>'}</div>
+ </section>`;
+}
 function showBalanceDetails(memberId){
  const book=group();
  const member=book?.members.find(item=>item.id===memberId);
  if(!member)return;
  const items=balanceItems(book).get(memberId);
- const total=items.reduce((sum,item)=>sum+item.amount,0);
- const rows=items.map(item=>`<div class="person balance-detail-row"><span class="detail">${esc(item.title)}<small>${item.date?esc(item.date)+' · ':''}${esc(item.description)}</small></span><strong>${signedBalance(item.amount)}</strong></div>`).join('');
- const label=total<0?'應付餘額':total>0?'應收餘額':'已平衡';
+ const expenses=items.filter(item=>item.kind==='expense');
+ const payments=items.filter(item=>item.kind==='payment');
+ const owes=expenses.some(item=>item.amount<0);
+ const receives=expenses.some(item=>item.amount>0);
+ const paid=payments.some(item=>item.amount>0);
+ const received=payments.some(item=>item.amount<0);
+ const expenseTitle=receives?(owes?'應付／應收':'應收'):'應付';
+ const paymentTitle=received?(paid?'已付／已收':'已收'):paid||!receives?'已付':'已收';
  modal((member.lineName||member.name)+' · 餘額明細',
-  `<div class="balance-detail-list">${rows||'<p class="hint">目前沒有費用或還款紀錄。</p>'}</div><div class="balance-detail-total"><span>${label}</span><strong>${signedBalance(total)}</strong></div>`,
+  `<div class="balance-detail-list">${balanceDetailSection(expenseTitle,expenses)}${balanceDetailSection(paymentTitle,payments)}${balanceDetailSection('總額',items)}</div>`,
   '關閉',async()=>{});
 }
 
