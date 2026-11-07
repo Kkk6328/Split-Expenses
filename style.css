@@ -85,3 +85,5 @@ label.check input{width:18px;min-height:18px;height:18px;margin:0;accent-color:v
 .payment-qr{display:block;width:100%;max-width:360px;height:auto;margin:20px auto;border:1px solid #dce2e8;border-radius:12px}.payment-link{display:block;padding:14px 18px;background:#344b63;color:white;text-align:center;border-radius:10px;text-decoration:none;overflow-wrap:anywhere}
 #photoInput{width:100%;font-size:16px}#photoEditor .hint{margin:12px 0}
 @media(max-width:600px){.expense-actions{width:100%;justify-content:flex-end}.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.photo-card img{height:150px}.transfer{flex-wrap:wrap;gap:12px}}
+
+.expense-day+.expense-day{margin-top:28px}.day-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;background:var(--soft);border-radius:10px}.day-heading h3{font-size:16px;margin:0;color:var(--ink)}.day-heading span{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
