@@ -219,3 +219,7 @@ input[type=date]::-webkit-date-and-time-value{text-align:left;min-width:0}
 .balance-date-section .balance-detail-row{padding:10px 0;gap:10px}
 .balance-date-section .balance-detail-row strong{flex-shrink:0}
 .balance-date-section .repayment-groups>.hint{margin:0;padding:8px 0}
+
+.balance-detail-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:0 0 12px;padding:4px;background:#f1f5f8;border-radius:10px}
+.balance-detail-tabs button{min-height:44px;border:1px solid transparent;border-radius:7px;padding:6px 3px;background:transparent;color:var(--ink);font:inherit;font-weight:600;white-space:nowrap}
+.balance-detail-tabs button[aria-selected="true"]{background:#fff;border-color:var(--line);color:var(--ink);box-shadow:0 1px 2px #182b4512}

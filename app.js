@@ -113,9 +113,39 @@ function showBalanceDetails(memberId){
  const received=payments.some(item=>item.amount<0);
  const expenseTitle=receives?(owes?'應付／應收':'應收'):'應付';
  const paymentTitle=received?(paid?'已付／已收':'已收'):paid||!receives?'已付':'已收';
+
+ const sections=[
+  {key:'expenses',title:expenseTitle,items:expenses},
+  {key:'payments',title:paymentTitle,items:payments},
+  {key:'net',title:'總額',items}
+ ];
+ const tabs=sections.map(({key,title},index)=>`<button type="button" role="tab" id="balance-tab-${key}" aria-controls="balance-panel-${key}" aria-selected="${index===0}" tabindex="${index===0?0:-1}">${title}</button>`).join('');
+ const panels=sections.map(({key,title,items},index)=>`<div role="tabpanel" id="balance-panel-${key}" aria-labelledby="balance-tab-${key}"${index===0?'':' hidden'}>${balanceDetailSection(title,items)}</div>`).join('');
  modal((member.lineName||member.name)+' · 餘額明細',
-  `<div class="balance-detail-list">${balanceDetailSection(expenseTitle,expenses)}${balanceDetailSection(paymentTitle,payments)}${balanceDetailSection('總額',items)}</div>`,
+  `<div class="balance-detail-tabs" role="tablist" aria-label="餘額明細分類">${tabs}</div><div class="balance-detail-list">${panels}</div>`,
   '關閉',async()=>{});
+
+ const buttons=Array.from($('fields').querySelectorAll('.balance-detail-tabs [role="tab"]'));
+ const selectTab=index=>{
+  buttons.forEach((button,i)=>{
+   const selected=i===index;
+   button.setAttribute('aria-selected',String(selected));
+   button.tabIndex=selected?0:-1;
+   $(button.getAttribute('aria-controls')).hidden=!selected;
+  });
+ };
+ buttons.forEach((button,index)=>{
+  button.onclick=()=>selectTab(index);
+  button.onkeydown=event=>{
+   const last=buttons.length-1;
+   const positions={ArrowLeft:index===0?last:index-1,ArrowRight:index===last?0:index+1,Home:0,End:last};
+   if(!Object.hasOwn(positions,event.key))return;
+   event.preventDefault();
+   const next=positions[event.key];
+   selectTab(next);
+   buttons[next].focus();
+  };
+ });
 }
 
 function plan(g){const b=balances(g),deb=g.members.filter(m=>b[m.id]<0).map(m=>({...m,left:-b[m.id]})),cre=g.members.filter(m=>b[m.id]>0).map(m=>({...m,left:b[m.id]}));let out=[],i=0,j=0;while(i<deb.length&&j<cre.length){const amount=Math.min(deb[i].left,cre[j].left);out.push({from:deb[i].id,to:cre[j].id,amount});deb[i].left-=amount;cre[j].left-=amount;if(!deb[i].left)i++;if(!cre[j].left)j++}return out}
