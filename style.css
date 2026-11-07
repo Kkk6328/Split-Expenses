@@ -154,3 +154,5 @@ button.expense-summary:hover{background:#f8fafc;filter:none}
 .expense-detail-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}.expense-detail-actions button{flex:1}
 .expense-info p{margin:8px 0}.expense-info h3{font-size:15px;margin:20px 0 4px}
 @media(max-width:380px){button.expense-summary{gap:8px}.expense-summary .amount{font-size:15px}.day-heading span{font-size:10px}}
+
+.bank-card{padding:16px;border:1px solid var(--line);border-radius:12px;margin:12px 0;background:#fafbfd}.bank-card h3{margin:0;font-size:16px}.bank-card label{margin:10px 0}.bank-copy-row{display:flex;align-items:center;gap:8px;margin-top:6px}.bank-copy-row input{flex:1;min-width:0;font-variant-numeric:tabular-nums}.bank-copy-row button{flex-shrink:0}.bank-add{width:100%;border-style:dashed!important}.bank-card .photo-remove{color:var(--danger);margin-top:8px}

@@ -3,7 +3,7 @@ const validId=x=>typeof x==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(x);
 export function validate(g){if(!g||!validId(g.id)||typeof g.name!=='string'||!g.name.trim()||g.name.length>60||!Array.isArray(g.members)||!g.members.length||g.members.length>30||!Array.isArray(g.expenses)||g.expenses.length>1000||!Array.isArray(g.settlements)||g.settlements.length>1000)fail('帳本格式錯誤');const ids=g.members.map(m=>m.id);if(new Set(ids).size!==ids.length||g.members.some(m=>!validId(m.id)||typeof m.name!=='string'||!m.name||m.name.length>40))fail('成員格式錯誤');for(const e of g.expenses){if(!validId(e.id)||typeof e.title!=='string'||!e.title||e.title.length>80||!Number.isFinite(e.amount)||e.amount<=0||!Number.isFinite(e.rate)||e.rate<=0||!Number.isSafeInteger(e.baseCents)||e.baseCents<1||e.baseCents!==Math.round(e.amount*e.rate*100)||!ids.includes(e.payer)||!Array.isArray(e.split)||!e.split.length||new Set(e.split).size!==e.split.length||e.split.some(id=>!ids.includes(id)))fail('費用格式錯誤')}for(const s of g.settlements)if(!validId(s.id)||!ids.includes(s.from)||!ids.includes(s.to)||s.from===s.to||!Number.isSafeInteger(s.amount)||s.amount<=0)fail('還款格式錯誤');if(JSON.stringify(g).length>500000)fail('帳本容量已滿')}
 function payload(g){const {canDelete,owner,access,joinToken,...rest}=g;return rest}
 export default {async fetch(req,env){const headers={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Content-Type':'application/json','Cache-Control':'no-store'};const reply=(o,status=200)=>new Response(JSON.stringify(o),{status,headers});if(req.method==='OPTIONS')return new Response(null,{status:204,headers});if(req.method!=='POST')return reply({error:'Method not allowed'},405);try{if(req.headers.get('Origin')&&req.headers.get('Origin')!==env.APP_ORIGIN)fail('來源不允許',403);const raw=await req.text();if(raw.length>750000)fail('資料過大',413);const b=JSON.parse(raw);const token=req.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>10000)fail('請登入 LINE',401);const verification=await fetch('https://api.line.me/oauth2/v2.1/verify',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id_token:token,client_id:env.LINE_CHANNEL_ID})});const v=await verification.json();if(!verification.ok||!v.sub)fail('LINE 登入已過期，請重新登入',401);const user=v.sub,db=env.DB;const output=r=>({...JSON.parse(r.data),version:r.version,cloud:true,canDelete:r.owner===user});const load=async id=>{if(!validId(id))fail('帳本編號無效');const r=await db.prepare('SELECT b.* FROM books b JOIN memberships m ON m.book_id=b.id WHERE b.id=? AND m.user_id=?').bind(id,user).first();if(!r)fail('無權存取帳本',403);return r};
-if(b.action==='capabilities')return reply({membershipVersion:3,mediaVersion:1});
+if(b.action==='capabilities')return reply({membershipVersion:3,mediaVersion:1,paymentVersion:2});
 if(['getExpenseImages','saveExpenseImages','getPayment','savePayment'].includes(b.action)){
  const r=await load(b.groupId),g=JSON.parse(r.data);if(g.deletedAt)fail('帳本已刪除',403);
  const payment=b.action.endsWith('Payment'),writing=b.action.startsWith('save');
@@ -13,9 +13,12 @@ if(['getExpenseImages','saveExpenseImages','getPayment','savePayment'].includes(
  const imageOK=x=>typeof x==='string'&&x.length<=220000&&/^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(x);
  let data;
  if(writing){
-  if(payment){const link=typeof b.link==='string'?b.link.trim():'';if(link){let url;try{url=new URL(link)}catch{fail('請輸入完整的 HTTPS 收款連結')}if(url.protocol!=='https:'||url.username||url.password||link.length>2000)fail('請輸入完整的 HTTPS 收款連結')}
-   if(b.qr&&!imageOK(b.qr))fail('QR Code 圖片格式或大小不符');data={link,qr:b.qr||''};
-  }else{if(!Array.isArray(b.images)||b.images.length>3||b.images.some(x=>!imageOK(x)))fail('最多 3 張圖片，每張須為壓縮後的 JPEG');data={images:b.images};}
+  if(payment){
+ if(!Array.isArray(b.accounts)||b.accounts.length>10)fail('最多可設定 10 組銀行帳號');
+ const accounts=b.accounts.map(x=>{if(!x||typeof x.bankCode!=='string'||!/^\d{3}$/.test(x.bankCode)||typeof x.account!=='string'||!/^\d{5,20}$/.test(x.account)||typeof x.name!=='string'||x.name.length>40)fail('銀行碼須為 3 碼，帳號須為 5～20 位數字');return {name:x.name.trim(),bankCode:x.bankCode,account:x.account}});
+ if(new Set(accounts.map(x=>x.bankCode+':'+x.account)).size!==accounts.length)fail('請勿重複新增相同帳號');
+ data={accounts};
+ }else{if(!Array.isArray(b.images)||b.images.length>3||b.images.some(x=>!imageOK(x)))fail('最多 3 張圖片，每張須為壓縮後的 JPEG');data={images:b.images};}
  }
  await db.prepare('CREATE TABLE IF NOT EXISTS book_media(book_id TEXT NOT NULL,kind TEXT NOT NULL,target_id TEXT NOT NULL,data TEXT NOT NULL,revision TEXT NOT NULL,PRIMARY KEY(book_id,kind,target_id))').run();
  const kind=payment?'payment':'expense',id=target.id;

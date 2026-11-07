@@ -32,11 +32,26 @@ async function openExpenseImages(bookId,expenseId){
  let read;modal('圖片：'+expense.title,'<p class="hint">收據、發票或消費照片，最多 3 張。只有此帳本成員可以查看。新增與移除後請按儲存。</p><div id="photoEditor"></div>','儲存圖片',async()=>{const images=await read();await api('saveExpenseImages',{groupId:bookId,expenseId,images,revision:data.revision});toast('圖片已儲存')});read=imageEditor(data.images,3);
  }catch(e){toast(e.message)}
 }
+
+async function copyBank(value,status){try{await navigator.clipboard.writeText(value);status.textContent='已複製：'+value}catch{status.textContent='無法自動複製，請長按上方欄位複製。'}}
 async function openPayment(bookId,memberId){
- try{await requireMedia();const g=group();if(!g||g.id!==bookId)return;const m=g.members.find(m=>m.id===memberId);if(!m)throw Error('請先配對自己的成員身分');
- const data=await api('getPayment',{groupId:bookId,memberId});if(group()?.id!==bookId)return;const user=window.WarmCloud?.user()?.uid,own=m.id===user||m.lineUserId===user;
- if(own){let read;modal('我的收款資訊',field('paymentLink','收款／轉帳連結（選填）',data.link,'url','maxlength="2000" placeholder="https://…"')+'<p class="hint">貼上銀行或支付服務提供的收款連結，或上傳該服務的收款 QR Code。此設定只用於目前帳本。</p><div id="photoEditor"></div>','儲存收款資訊',async f=>{const link=f.get('paymentLink').trim();if(link){let u;try{u=new URL(link)}catch{throw Error('請輸入完整的 HTTPS 收款連結')}if(u.protocol!=='https:'||u.username||u.password)throw Error('請使用 HTTPS 收款連結')}const images=await read();await api('savePayment',{groupId:bookId,memberId,link,qr:images[0]||'',revision:data.revision});toast('收款資訊已儲存')});read=imageEditor(data.qr?[data.qr]:[],1);
- }else{modal(m.name+' 的轉帳資訊','<div id="paymentView"></div><p class="hint">轉帳前請核對收款人及金額。完成轉帳後，再回到結算頁記錄已付款。</p>','關閉',async()=>{});const view=$('paymentView');if(!data.link&&!data.qr){view.textContent='此成員尚未設定收款資訊，請聯絡本人提供。'}if(data.link){const a=document.createElement('a');a.className='payment-link';a.href=data.link;a.target='_blank';a.rel='noopener noreferrer';a.textContent='開啟收款連結 ↗';view.append(a);const domain=document.createElement('p');domain.className='hint';domain.textContent=new URL(data.link).hostname;view.append(domain)}if(data.qr){const img=document.createElement('img');img.src=data.qr;img.className='payment-qr';img.alt=m.name+' 的收款 QR Code';const a=document.createElement('a');a.href=data.qr;a.download='payment-qr.jpg';a.append(img);view.append(a);const hint=document.createElement('p');hint.className='hint';hint.textContent='點 QR Code 可下載，再使用銀行或支付 App 掃描／從相簿讀取。';view.append(hint)}}
+ try{const cap=await api('capabilities');if(cap.paymentVersion!==2)throw Error('多組銀行帳號功能尚未啟用，請先更新 Cloudflare Worker。');
+ const g=group();if(!g||g.id!==bookId)return;const m=g.members.find(m=>m.id===memberId);if(!m)throw Error('請先配對自己的成員身分');
+ const data=await api('getPayment',{groupId:bookId,memberId});if(group()?.id!==bookId)return;
+ const user=window.WarmCloud?.user()?.uid,own=m.id===user||m.lineUserId===user;
+ let accounts=(data.accounts||[]).map(x=>({...x}));
+ modal(own?'我的收款帳號':m.name+' 的收款帳號','<p class="hint">'+(own?'可設定多組銀行帳號，僅限此帳本成員查看。銀行碼與帳號的開頭 0 會保留。':'選擇收款帳號，複製銀行碼與帳號後至銀行 App 轉帳。請核對收款人。')+'</p><div id="bankAccounts"></div>'+(own?'<button type="button" id="addBank" class="quiet bank-add">＋ 新增銀行帳號</button>':'')+'<p class="hint" id="bankStatus" role="status"></p>',own?'儲存收款帳號':'關閉',async()=>{if(!own)return;collect();for(const x of accounts)if(!/^\\d{3}$/.test(x.bankCode)||!/^\\d{5,20}$/.test(x.account))throw Error('銀行碼須為 3 碼，帳號須為 5～20 位數字');await api('savePayment',{groupId:bookId,memberId,accounts,revision:data.revision});toast('收款帳號已儲存')});
+ function collect(){if(own)accounts=[...$('bankAccounts').children].filter(x=>x.classList.contains('bank-card')).map(card=>({name:card.querySelector('[data-bank-name]').value.trim(),bankCode:card.querySelector('[data-bank-code]').value.trim(),account:card.querySelector('[data-bank-account]').value.replace(/[ -]/g,'')}))}
+ function draw(){const host=$('bankAccounts');host.replaceChildren();if(!accounts.length&&!own){host.textContent='此成員尚未設定銀行帳號。';return}
+ accounts.forEach((x,i)=>{const card=document.createElement('section');card.className='bank-card';
+ card.innerHTML=(own?'<label>銀行名稱／備註（選填）<input data-bank-name maxlength="40" value="'+esc(x.name)+'" placeholder="例如：國泰世華"></label>':'<h3>'+esc(x.name||'收款帳號 '+(i+1))+'</h3>')+'<label>銀行代碼<div class="bank-copy-row"><input data-bank-code type="text" inputmode="numeric" maxlength="3" '+(own?'required pattern="[0-9]{3}"':'readonly')+' value="'+esc(x.bankCode)+'"><button type="button" class="quiet" data-copy-code>複製</button></div></label><label>銀行帳號<div class="bank-copy-row"><input data-bank-account type="text" inputmode="numeric" maxlength="24" '+(own?'required':'readonly')+' value="'+esc(x.account)+'"><button type="button" class="quiet" data-copy-account>複製</button></div></label>';
+ card.querySelector('[data-copy-code]').onclick=()=>copyBank(card.querySelector('[data-bank-code]').value.trim(),$('bankStatus'));
+ card.querySelector('[data-copy-account]').onclick=()=>copyBank(card.querySelector('[data-bank-account]').value.replace(/[ -]/g,''),$('bankStatus'));
+ if(own){const remove=photoButton('移除此帳號',()=>{collect();accounts.splice(i,1);draw()});remove.classList.add('photo-remove');card.append(remove)}host.append(card)});
+ if(own)$('addBank').disabled=accounts.length>=10;
+ }
+ if(own)$('addBank').onclick=()=>{collect();if(accounts.length<10){accounts.push({name:'',bankCode:'',account:''});draw();$('bankAccounts').lastElementChild.querySelector('input').focus()}};
+ if(own&&!accounts.length)accounts.push({name:'',bankCode:'',account:''});draw();
  }catch(e){toast(e.message)}
 }
 document.addEventListener('click',e=>{const images=e.target.closest('[data-images]'),payment=e.target.closest('[data-payment]');if(images&&group())openExpenseImages(group().id,images.dataset.images);if(payment&&group())openPayment(group().id,payment.dataset.payment)});
