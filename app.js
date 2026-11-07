@@ -47,16 +47,16 @@ function balanceItems(book){
  for(const expense of book.expenses){
   const shares=allocations(expense);
   const own=shares.find(share=>share.id===expense.payer)?.amount||0;
-  items.get(expense.payer).push({kind:'expense',title:expense.title,date:expense.date,description:'代墊總額扣除自己的分攤',amount:expense.baseCents-own});
+  items.get(expense.payer).push({kind:'expense',expenseId:expense.id,title:expense.title,date:expense.date,description:'代墊總額扣除自己的分攤',amount:expense.baseCents-own});
   for(const share of shares){
-   if(share.id!==expense.payer)items.get(share.id).push({kind:'expense',title:expense.title,date:expense.date,description:'分攤費用',amount:-share.amount});
+   if(share.id!==expense.payer)items.get(share.id).push({kind:'expense',expenseId:expense.id,title:expense.title,date:expense.date,description:'分攤費用',amount:-share.amount});
   }
  }
  for(const payment of book.settlements){
   const title=titles.get(payment.expenseId);
   const suffix=title?' · '+title:'';
-  items.get(payment.from).push({kind:'payment',title:'已還款'+suffix,date:payment.date,description:'付給 '+name(book,payment.to),amount:payment.amount});
-  items.get(payment.to).push({kind:'payment',title:'已收款'+suffix,date:payment.date,description:'收到 '+name(book,payment.from)+' 的還款',amount:-payment.amount});
+  items.get(payment.from).push({kind:'payment',expenseId:payment.expenseId,title:'已還款'+suffix,date:payment.date,description:'付給 '+name(book,payment.to),amount:payment.amount});
+  items.get(payment.to).push({kind:'payment',expenseId:payment.expenseId,title:'已收款'+suffix,date:payment.date,description:'收到 '+name(book,payment.from)+' 的還款',amount:-payment.amount});
  }
  return items;
 }
@@ -79,7 +79,7 @@ function balanceRows(book,totals){
  }).join('');
 }
 
-function balanceDetailSection(title,items){
+function balanceDetailSection(title,items,emptyMessage='目前沒有紀錄'){
  const byDate=new Map();
  let total=0;
  for(const item of items){
@@ -97,30 +97,65 @@ function balanceDetailSection(title,items){
   </details>`).join('');
  return `<section class="repayment-history balance-date-section">
   <h3 class="repayment-section-title"><span class="repayment-label">${title}</span><small>${signedBalance(total)}</small></h3>
-  <div class="repayment-groups">${dates||'<p class="hint">目前沒有紀錄</p>'}</div>
+  <div class="repayment-groups">${dates||'<p class="hint">'+emptyMessage+'</p>'}</div>
  </section>`;
 }
+
+function outstandingBalanceItems(items){
+ const remaining=items.map(item=>({...item}));
+ const expenses=new Map(remaining.filter(item=>item.kind==='expense').map(item=>[item.expenseId,item]));
+ const offset=(debit,credit)=>{
+  const amount=Math.min(-debit.amount,credit.amount);
+  debit.amount+=amount;
+  credit.amount-=amount;
+ };
+ // Apply payments to their recorded expense before netting the rest.
+ for(const payment of remaining){
+  if(payment.kind!=='payment'||!payment.expenseId)continue;
+  const expense=expenses.get(payment.expenseId);
+  if(!expense||expense.amount*payment.amount>=0)continue;
+  if(expense.amount<0)offset(expense,payment);
+  else offset(payment,expense);
+ }
+ const ordered=[...remaining].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+ const debits=ordered.filter(item=>item.amount<0);
+ const credits=ordered.filter(item=>item.amount>0);
+ let debit=0,credit=0;
+ while(debit<debits.length&&credit<credits.length){
+  offset(debits[debit],credits[credit]);
+  if(debits[debit].amount===0)debit++;
+  if(credits[credit].amount===0)credit++;
+ }
+ return remaining.flatMap((item,index)=>{
+  if(item.amount===0)return [];
+  if(item.kind==='payment')return [{...item,title:'還款差額 · '+item.title}];
+  if(item.amount!==items[index].amount)return [{...item,description:item.description+' · 剩餘金額'}];
+  return [item];
+ });
+}
+
 function showBalanceDetails(memberId){
  const book=group();
  const member=book?.members.find(item=>item.id===memberId);
  if(!member)return;
  const items=balanceItems(book).get(memberId);
  const expenses=items.filter(item=>item.kind==='expense');
+ const pending=outstandingBalanceItems(items);
  const payments=items.filter(item=>item.kind==='payment');
  const owes=expenses.some(item=>item.amount<0);
  const receives=expenses.some(item=>item.amount>0);
  const paid=payments.some(item=>item.amount>0);
  const received=payments.some(item=>item.amount<0);
- const expenseTitle=receives?(owes?'應付／應收':'應收'):'應付';
+ const expenseTitle=pending.length?(pending[0].amount<0?'應付':'應收'):receives&&!owes?'應收':'應付';
  const paymentTitle=received?(paid?'已付／已收':'已收'):paid||!receives?'已付':'已收';
 
  const sections=[
-  {key:'expenses',title:expenseTitle,items:expenses},
+  {key:'expenses',title:expenseTitle,items:pending,emptyMessage:expenseTitle==='應收'?'沒有待收款項':'沒有待付款項'},
   {key:'payments',title:paymentTitle,items:payments},
   {key:'net',title:'總額',items}
  ];
  const tabs=sections.map(({key,title},index)=>`<button type="button" role="tab" id="balance-tab-${key}" aria-controls="balance-panel-${key}" aria-selected="${index===0}" tabindex="${index===0?0:-1}">${title}</button>`).join('');
- const panels=sections.map(({key,title,items},index)=>`<div role="tabpanel" id="balance-panel-${key}" aria-labelledby="balance-tab-${key}"${index===0?'':' hidden'}>${balanceDetailSection(title,items)}</div>`).join('');
+ const panels=sections.map(({key,title,items,emptyMessage},index)=>`<div role="tabpanel" id="balance-panel-${key}" aria-labelledby="balance-tab-${key}"${index===0?'':' hidden'}>${balanceDetailSection(title,items,emptyMessage)}</div>`).join('');
  modal((member.lineName||member.name)+' · 餘額明細',
   `<div class="balance-detail-tabs" role="tablist" aria-label="餘額明細分類">${tabs}</div><div class="balance-detail-list">${panels}</div>`,
   '關閉',async()=>{});
