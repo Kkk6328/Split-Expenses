@@ -53,10 +53,48 @@ async function openPayment(bookId,memberId){
 
  const pickerId='bank-picker-'+i,codeId='bank-code-'+i;
  card.innerHTML='<h3 class="bank-auto-name">'+esc(bankName(x.bankCode)||'收款帳號 '+(i+1))+'</h3>'+(own?'<label for="'+pickerId+'">選擇銀行</label><input class="bank-search" type="search" placeholder="搜尋銀行名稱或代碼" aria-label="搜尋銀行名稱或代碼"><select id="'+pickerId+'" class="bank-select" aria-label="選擇銀行"></select>':'')+'<div data-code-field><label for="'+codeId+'">銀行代碼'+(own?'（可自行輸入）':'')+'</label><div class="bank-copy-row"><input id="'+codeId+'" data-bank-code type="text" inputmode="numeric" maxlength="3" '+(own?'required pattern="[0-9]{3}"':'readonly')+' value="'+esc(x.bankCode)+'"><button type="button" class="quiet" data-copy-code>複製</button></div></div><label>銀行帳號<div class="bank-copy-row"><input data-bank-account type="text" inputmode="numeric" maxlength="24" '+(own?'required':'readonly')+' value="'+esc(x.account)+'"><button type="button" class="quiet" data-copy-account>複製</button></div></label>';
- if(own){const select=card.querySelector('.bank-select'),search=card.querySelector('.bank-search'),code=card.querySelector('[data-bank-code]'),heading=card.querySelector('.bank-auto-name'),codeField=card.querySelector('[data-code-field]');select.required=true;const showManual=show=>{codeField.hidden=!show;code.required=show;};showManual(!!x.bankCode&&!bankName(x.bankCode));
- const options=()=>{const q=search.value.trim().replaceAll('台','臺');select.replaceChildren();const placeholder=new Option(q?'搜尋結果：請選擇':'請選擇銀行，或自行輸入代碼','');select.add(placeholder);for(const bank of BANK_CODES.filter(b=>!q||(b.code+' '+b.name.replaceAll('台','臺')).includes(q)))select.add(new Option(bank.code+' '+bank.name,bank.code));select.add(new Option('其他／自行輸入','manual'));select.value=[...select.options].some(o=>o.value===code.value)?code.value:'manual';};
- select.onchange=()=>{if(select.value==='manual'){showManual(true);code.focus();return}showManual(false);code.value=select.value;heading.textContent=bankName(code.value)||'收款帳號 '+(i+1)};
- search.oninput=options;code.oninput=()=>{code.value=code.value.replace(/[^0-9]/g,'');heading.textContent=bankName(code.value)||'自行輸入銀行代碼';select.value=[...select.options].some(o=>o.value===code.value)?code.value:'manual'};options();
+
+ if(own){
+  const select=card.querySelector('.bank-select');
+  const search=card.querySelector('.bank-search');
+  const code=card.querySelector('[data-bank-code]');
+  const heading=card.querySelector('.bank-auto-name');
+  const codeField=card.querySelector('[data-code-field]');
+  select.required=true;
+  const showManual=show=>{codeField.hidden=!show;code.required=show;};
+  showManual(!!x.bankCode&&!bankName(x.bankCode));
+  const query=()=>search.value.normalize('NFKC').trim().replaceAll('台','臺');
+  const applyBank=bankCode=>{
+   code.value=bankCode;
+   showManual(false);
+   heading.textContent=bankName(bankCode)||'收款帳號 '+(i+1);
+  };
+  const options=()=>{
+   const q=query();
+   select.replaceChildren();
+   select.add(new Option(q?'搜尋結果：請選擇':'請選擇銀行，或自行輸入代碼',''));
+   const manual=!codeField.hidden;
+   for(const bank of BANK_CODES){
+    const matches=!q||(bank.code+' '+bank.name.normalize('NFKC').replaceAll('台','臺')).includes(q);
+    if(matches||(!manual&&bank.code===code.value))select.add(new Option(bank.code+' '+bank.name,bank.code));
+   }
+   select.add(new Option('其他／自行輸入','manual'));
+   select.value=manual?'manual':code.value;
+  };
+  select.onchange=()=>{
+   if(select.value==='manual'){showManual(true);code.focus();return}
+   applyBank(select.value);
+  };
+  search.oninput=()=>{
+   const q=query();
+   if(/^[0-9]{3}$/.test(q)&&bankName(q))applyBank(q);
+   options();
+  };
+  code.oninput=()=>{
+   code.value=code.value.replace(/[^0-9]/g,'');
+   heading.textContent=bankName(code.value)||'自行輸入銀行代碼';
+  };
+  options();
  }
  card.querySelector('[data-copy-code]').onclick=()=>copyBank(card.querySelector('[data-bank-code]').value.trim(),$('bankStatus'));
  card.querySelector('[data-copy-account]').onclick=()=>copyBank(normalizeBankAccount(card.querySelector('[data-bank-account]').value),$('bankStatus'));
