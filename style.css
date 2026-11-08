@@ -275,6 +275,18 @@ dialog:modal{
 .itinerary-day { margin-bottom: 18px; }
 .itinerary-day h3 { font-size: 14px; margin: 0 0 8px; color: var(--ink); }
 .itinerary-day h3 span { color: var(--muted); font-weight: 400; margin-inline-start: 6px; }
+.itinerary-day-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.itinerary-day-header h3 { margin: 0; }
+.itinerary-day-header button { flex-shrink: 0; min-height: 36px; padding: 4px 8px; font-size: 12px; }
+.itinerary-order-list { margin: 0; padding-inline-start: 24px; }
+.itinerary-order-list li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.itinerary-order-list li > span { display: inline-block; width: calc(100% - 96px); overflow-wrap: anywhere; vertical-align: middle; }
+.itinerary-order-list li small { color: var(--muted); }
+.itinerary-order-list button { min-width: 42px; padding: 4px; vertical-align: middle; }
+.itinerary-order-list button:disabled { cursor: default; }
+.itinerary-transfer-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.itinerary-transfer-actions button { min-height: 40px; padding: 4px 9px; font-size: 13px; }
+.itinerary-transfer-actions button[aria-pressed="true"] { background: var(--green); color: #fff; border-color: var(--green); }
 .itinerary-item {
  display: grid;
  grid-template-columns: 4.5em minmax(0,1fr) auto;
