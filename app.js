@@ -1,7 +1,7 @@
 'use strict';
 function expenseDays(expenses){const days=new Map();for(const e of [...expenses].sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created)){if(!days.has(e.date))days.set(e.date,{date:e.date,expenses:[],total:0});const day=days.get(e.date);day.expenses.push(e);day.total+=e.baseCents}return [...days.values()]}
 const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),uid=()=>crypto.randomUUID(),money=n=>new Intl.NumberFormat('zh-TW',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n/100);
-const storageKey=window.APP_CONFIG?.lineApiBase?'split-line-v1':'warm-split-v1';let state;try{state=JSON.parse(localStorage.getItem(storageKey));if(!state&&window.APP_CONFIG?.lineApiBase){const old=JSON.parse(localStorage.getItem('warm-split-v1')||'null');if(old)state={groups:old.groups.filter(g=>!g.cloud),current:null}}}catch{}state=state||{groups:[],current:null};let tab='expenses',profile=null,ready=false;
+const storageKey=window.APP_CONFIG?.lineApiBase?'split-line-v1':'warm-split-v1';let state;try{state=JSON.parse(localStorage.getItem(storageKey));if(!state&&window.APP_CONFIG?.lineApiBase){const old=JSON.parse(localStorage.getItem('warm-split-v1')||'null');if(old)state={groups:old.groups.filter(g=>!g.cloud),current:null}}}catch{}state=state||{groups:[],current:null};let tab='expenses',profile=null,ready=false,openedBook='',itineraryView=null;
 const cfg=window.APP_CONFIG||{},activeGroups=()=>state.groups.filter(g=>!g.deletedAt&&(!cfg.lineApiBase||(cloud()&&g.cloud))),group=()=>activeGroups().find(g=>g.id===state.current),cloud=()=>!!window.WarmCloud?.user(),today=()=>new Date().toLocaleDateString('en-CA');
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').style.display='none',4000)}
 function persist(){localStorage.setItem(storageKey,JSON.stringify(state))}
@@ -191,7 +191,127 @@ function showBalanceDetails(memberId){
 
 function plan(g){const b=balances(g),deb=g.members.filter(m=>b[m.id]<0).map(m=>({...m,left:-b[m.id]})),cre=g.members.filter(m=>b[m.id]>0).map(m=>({...m,left:b[m.id]}));let out=[],i=0,j=0;while(i<deb.length&&j<cre.length){const amount=Math.min(deb[i].left,cre[j].left);out.push({from:deb[i].id,to:cre[j].id,amount});deb[i].left-=amount;cre[j].left-=amount;if(!deb[i].left)i++;if(!cre[j].left)j++}return out}
 const name=(g,id)=>g.members.find(m=>m.id===id)?.name||'未知成員';
-function render(){const g=group();document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(picker){picker.innerHTML=activeGroups().map(x=>`<option value="${esc(x.id)}" ${x.id===g?.id?'selected':''}>${esc(x.name)}</option>`).join('');picker.onchange=()=>{state.current=picker.value;tab='expenses';persist();render()};$('mobileNew').onclick=newGroup;}if(cfg.lineApiBase&&$('emptyTitle')){$('emptyTitle').textContent=cloud()?'尚未建立帳本':'登入後查看帳本';$('emptyCreate').textContent=cloud()?'建立帳本':'LINE 登入'}$('groupCount').textContent=activeGroups().length;$('groups').innerHTML=activeGroups().map(x=>`<button class="group ${x.id===g?.id?'selected':''}" data-group="${x.id}">▤ ${esc(x.name)}<small>${x.members.length} 位成員 · ${x.expenses.length} 筆費用${x.cloud?' · 共用':''}</small></button>`).join('');$('groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.current=b.dataset.group;tab='expenses';persist();render()});$('empty').hidden=!!g;$('book').hidden=!g;if(!g)return;$('deleteBook').hidden=g.cloud&&g.canDelete!==true;$('revokeInvites').hidden=!g.cloud||g.canDelete!==true;$('invite').hidden=g.cloud&&g.canDelete!==true;$('bookTitle').textContent=g.name;$('bookMeta').textContent=`建立日期 ${g.created}`;$('total').textContent='NT$ '+money(g.expenses.reduce((s,e)=>s+e.baseCents,0));$('memberCount').textContent=g.members.length+' 人';$('expenseCount').textContent=g.expenses.length+' 筆';document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$('addExpense').hidden=tab!=='expenses';$('viewHint').textContent=tab==='expenses'?'費用紀錄與換算明細':tab==='balances'?'成員餘額 · 點金額查看計算明細':'管理帳本的分攤成員';const c=$('content');if(tab==='expenses'){c.innerHTML=g.expenses.length?expenseDays(g.expenses).map(day=>`<section class="expense-day"><div class="day-heading"><h3>${esc(day.date)}</h3><span>${day.expenses.length} 筆 · NT$ ${money(day.total)}</span></div>${day.expenses.map(e=>`<button type="button" class="expense expense-summary shared-expense" data-expense="${esc(e.id)}" aria-label="查看費用：${esc(e.title)}"><span class="icon">${esc(e.category==='🧋'?'🥤':e.category)}</span><span class="detail"><strong>${esc(e.title)}</strong><small>${esc(name(g,e.payer))} 先付</small><span class="paid-total">NT$ ${briefMoney(e.baseCents)}</span></span><span class="amount"><small>${e.split.length} 人 · 各付</small>${e.baseCents%e.split.length?'約 ':''}NT$ ${briefMoney(Math.round(e.baseCents/e.split.length))}</span></button>`).join('')}</section>`).join(''):'<div class="empty"><div class="empty-symbol">▤</div><p>尚無費用，請點「記一筆」新增。</p></div>';c.querySelectorAll('[data-expense]').forEach(b=>b.onclick=()=>showExpense(b.dataset.expense))}else if(tab==='members'){c.innerHTML=g.members.map(m=>`<div class="person"><span class="avatar" aria-hidden="true">${memberAvatar(m)}</span><span class="detail">${esc(m.lineName||m.name)}${m.lineName&&m.lineName!==m.name?`<small>帳本暱稱：${esc(m.name)}</small>`:''}${cfg.lineApiBase&&(m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?'<small>你</small>':cfg.lineApiBase?`<small>${m.lineUserId||/^U[0-9a-f]{32}$/.test(m.id)?'已加入':'待配對'}</small>`:''}</span></div>`).join('')+(cfg.lineApiBase?`<p class="hint">只有加入此帳本的成員可以查看與記帳。${g.canDelete?'使用上方「邀請成員」分享加入連結。':'由帳本建立者邀請新成員。'}</p>`:'<button id="addMember" class="quiet" style="margin-top:20px">＋ 加入成員</button>');if(cfg.lineApiBase){const pay=document.createElement('button');pay.textContent='設定我的收款資訊';pay.className='quiet';pay.onclick=()=>openPayment(g.id, g.members.find(m=>m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?.id);c.append(pay)}if(cfg.lineApiBase&&g.canDelete){const add=document.createElement('button');add.textContent='＋ 預設成員';add.className='quiet';add.onclick=()=>modal('預設成員',field('name','成員暱稱','','text','required maxlength="40"')+'<p class="hint">可先替此成員記帳，朋友登入 LINE 後再認領。</p>','新增成員',async f=>{await requireMemberVersion();const r=await api('addMember',{groupId:g.id,name:f.get('name')});state.groups[state.groups.findIndex(x=>x.id===g.id)]=r.group;persist();render()});c.append(add)}if(!cfg.lineApiBase){$('addMember').onclick=()=>modal('新增成員',field('name','成員暱稱','','text','required maxlength="40"'),'加入',async f=>{const n=f.get('name').trim();if(!n||g.members.some(m=>m.name===n))throw Error('請輸入不同的暱稱');const next=structuredClone(g);next.members.push({id:uid(),name:n});await commit(next)})}}else{const b=balances(g),p=plan(g);c.innerHTML=mySettlement(g,p)+'<div class="balance-board">'+balanceRows(g,b)+'</div>'+suggestedTransfers(g,p,c)+repaymentHistory(g,c);c.querySelectorAll('[data-balance-member]').forEach(button=>{button.onclick=()=>showBalanceDetails(button.dataset.balanceMember)});
+const bookTabs={itinerary:'行程',balances:'分帳結算',expenses:'花費明細',members:'成員'};
+function preferenceKey(kind,id=''){
+ const account=window.WarmCloud?.user()?.uid||'local';
+ return `${storageKey}:${kind}:${account}:${id}`;
+}
+function readPreference(kind,id){
+ try{return localStorage.getItem(preferenceKey(kind,id))}catch{return null}
+}
+function pinnedTab(g){
+ const value=readPreference('tab',g.id);
+ return Object.hasOwn(bookTabs,value)&&(value!=='itinerary'||cfg.lineApiBase)?value:null;
+}
+function togglePinnedTab(){
+ const g=group();
+ if(!g)return;
+ const pinned=pinnedTab(g)===tab;
+ try{
+  const key=preferenceKey('tab',g.id);
+  if(pinned)localStorage.removeItem(key);
+  else localStorage.setItem(key,tab);
+ }catch{toast('無法儲存預設頁面');return}
+ render();
+ toast(pinned?'已取消置頂':`下次開啟此帳本會先顯示「${bookTabs[tab]}」`);
+}
+function renderItinerary(g,c){
+ const account=window.WarmCloud?.user()?.uid;
+ if(itineraryView?.book!==g.id||itineraryView.account!==account){
+  const view={book:g.id,account,items:null};
+  itineraryView=view;
+  api('listItinerary',{groupId:g.id}).then(({items})=>{view.items=items}).catch(error=>{
+   view.error=error.message==='未知操作'?'行程功能等待後端更新。':error.message;
+  }).finally(()=>{if(itineraryView===view&&tab==='itinerary'&&group()?.id===g.id)render()});
+ }
+ const {items,error}=itineraryView;
+ $('addItinerary').disabled=!items;
+ if(error){
+  c.innerHTML=`<p class="hint" role="alert">${esc(error)}</p><button type="button" id="retryItinerary" class="quiet">重新載入</button>`;
+  $('retryItinerary').onclick=()=>{itineraryView=null;render()};
+  return;
+ }
+ if(!items){
+  c.innerHTML='<p class="hint" role="status">載入行程中…</p>';
+  return;
+ }
+ if(!items.length){
+  c.innerHTML='<div class="empty"><div class="empty-symbol" aria-hidden="true">📍</div><p>還沒有行程，點「新增行程」記下第一站。</p></div>';
+  return;
+ }
+ const days=new Map();
+ for(const item of items){
+  if(!days.has(item.date))days.set(item.date,[]);
+  days.get(item.date).push(item);
+ }
+ c.innerHTML=[...days].map(([date,entries])=>`<section class="itinerary-day"><h3>${esc(date)}</h3>${entries.map(item=>`
+  <article class="itinerary-item">
+   <time datetime="${esc(item.date+(item.time?'T'+item.time:''))}">${item.time?esc(item.time):'未定時間'}</time>
+   <div><strong>${esc(item.place)}</strong>${item.note?`<p><small>${item.privateNote?'🔒 僅自己可見':'備註'}</small>${esc(item.note)}</p>`:''}</div>
+   ${item.canEdit?`<button type="button" class="quiet" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}">編輯</button>`:''}
+  </article>`).join('')}</section>`).join('');
+ c.querySelectorAll('[data-itinerary]').forEach(button=>{
+  button.onclick=()=>editItinerary(g,items.find(item=>item.id===button.dataset.itinerary));
+ });
+}
+function editItinerary(g,item){
+ if(!g)return;
+ const id=item?.id||uid();
+ const form=field('date','日期',item?.date||today(),'date','required')+
+  field('time','時間（選填）',item?.time||'','time')+
+  field('place','地點',item?.place||'','text','required maxlength="120" placeholder="例如：廣藏市場"')+
+  `<label for="itineraryNote">備註（選填）</label><textarea id="itineraryNote" name="note" rows="3" maxlength="1000">${esc(item?.note||'')}</textarea>
+  <label for="itineraryVisibility">備註誰可以看？</label><select id="itineraryVisibility" name="visibility">
+   <option value="shared">帳本成員可見</option><option value="private"${item?.privateNote?' selected':''}>僅自己可見</option>
+  </select><p class="hint">日期、時間與地點會顯示給此帳本的成員。</p>`+
+  (item?'<button type="button" id="deleteItinerary" class="quiet danger">刪除行程</button>':'');
+ const reload=()=>{
+  if(group()?.id!==g.id)return;
+  itineraryView=null;
+  render();
+ };
+ modal(item?'編輯行程':'新增行程',form,'儲存行程',async f=>{
+  const place=f.get('place').trim();
+  if(!place)throw Error('請填寫地點');
+  await api('saveItinerary',{groupId:g.id,id,revision:item?.revision||'',date:f.get('date'),
+   time:f.get('time'),place,note:f.get('note').trim(),privateNote:f.get('visibility')==='private'});
+  reload();
+  toast('行程已儲存');
+ });
+ if(item)$('deleteItinerary').onclick=()=>{
+  modal('刪除行程',`<p>確定刪除「${esc(item.place)}」？</p>`,'確認刪除',async()=>{
+   await api('deleteItinerary',{groupId:g.id,id,revision:item.revision});
+   reload();
+   toast('行程已刪除');
+  });
+ };
+}
+function render(){const g=group();
+ const bookKey=g?preferenceKey('book',g.id):'';
+ if(openedBook!==bookKey){
+  openedBook=bookKey;
+  tab=g?pinnedTab(g)||'expenses':'expenses';
+  itineraryView=null;
+  if(g)try{localStorage.setItem(preferenceKey('current'),g.id)}catch{}
+ }
+ if(tab!=='itinerary')itineraryView=null;
+document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(picker){picker.innerHTML=activeGroups().map(x=>`<option value="${esc(x.id)}" ${x.id===g?.id?'selected':''}>${esc(x.name)}</option>`).join('');picker.onchange=()=>{state.current=picker.value;persist();render()};$('mobileNew').onclick=newGroup;}if(cfg.lineApiBase&&$('emptyTitle')){$('emptyTitle').textContent=cloud()?'尚未建立帳本':'登入後查看帳本';$('emptyCreate').textContent=cloud()?'建立帳本':'LINE 登入'}$('groupCount').textContent=activeGroups().length;$('groups').innerHTML=activeGroups().map(x=>`<button class="group ${x.id===g?.id?'selected':''}" data-group="${x.id}">▤ ${esc(x.name)}<small>${x.members.length} 位成員 · ${x.expenses.length} 筆費用${x.cloud?' · 共用':''}</small></button>`).join('');$('groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.current=b.dataset.group;persist();render()});$('empty').hidden=!!g;$('book').hidden=!g;if(!g)return;$('deleteBook').hidden=g.cloud&&g.canDelete!==true;$('revokeInvites').hidden=!g.cloud||g.canDelete!==true;$('invite').hidden=g.cloud&&g.canDelete!==true;$('bookTitle').textContent=g.name;$('bookMeta').textContent=`建立日期 ${g.created}`;$('total').textContent='NT$ '+money(g.expenses.reduce((s,e)=>s+e.baseCents,0));$('memberCount').textContent=g.members.length+' 人';$('expenseCount').textContent=g.expenses.length+' 筆';document.querySelectorAll('[data-tab]').forEach(b=>{
+  const active=b.dataset.tab===tab;
+  b.classList.toggle('active',active);
+  b.classList.toggle('pinned',b.dataset.tab===pinnedTab(g));
+  b.setAttribute('aria-pressed',String(active));
+ });
+ const pin=$('pinTab'),pinned=pinnedTab(g)===tab;
+ pin.setAttribute('aria-pressed',String(pinned));
+ pin.setAttribute('aria-label',pinned?`取消置頂：${bookTabs[tab]}`:`設為預設頁面：${bookTabs[tab]}`);
+ pin.title=pinned?'取消置頂':'設為預設頁面';
+ $('addExpense').hidden=tab!=='expenses';
+ $('addItinerary').hidden=tab!=='itinerary';
+ $('viewHint').textContent={itinerary:'依日期查看行程',expenses:'費用紀錄與換算明細',
+  balances:'成員餘額 · 點金額查看計算明細',members:'管理帳本的分攤成員'}[tab];
+ const c=$('content');
+ if(tab==='itinerary'){renderItinerary(g,c);return}
+ if(tab==='expenses'){c.innerHTML=g.expenses.length?expenseDays(g.expenses).map(day=>`<section class="expense-day"><div class="day-heading"><h3>${esc(day.date)}</h3><span>${day.expenses.length} 筆 · NT$ ${money(day.total)}</span></div>${day.expenses.map(e=>`<button type="button" class="expense expense-summary shared-expense" data-expense="${esc(e.id)}" aria-label="查看費用：${esc(e.title)}"><span class="icon">${esc(e.category==='🧋'?'🥤':e.category)}</span><span class="detail"><strong>${esc(e.title)}</strong><small>${esc(name(g,e.payer))} 先付</small><span class="paid-total">NT$ ${briefMoney(e.baseCents)}</span></span><span class="amount"><small>${e.split.length} 人 · 各付</small>${e.baseCents%e.split.length?'約 ':''}NT$ ${briefMoney(Math.round(e.baseCents/e.split.length))}</span></button>`).join('')}</section>`).join(''):'<div class="empty"><div class="empty-symbol">▤</div><p>尚無費用，請點「記一筆」新增。</p></div>';c.querySelectorAll('[data-expense]').forEach(b=>b.onclick=()=>showExpense(b.dataset.expense))}else if(tab==='members'){c.innerHTML=g.members.map(m=>`<div class="person"><span class="avatar" aria-hidden="true">${memberAvatar(m)}</span><span class="detail">${esc(m.lineName||m.name)}${m.lineName&&m.lineName!==m.name?`<small>帳本暱稱：${esc(m.name)}</small>`:''}${cfg.lineApiBase&&(m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?'<small>你</small>':cfg.lineApiBase?`<small>${m.lineUserId||/^U[0-9a-f]{32}$/.test(m.id)?'已加入':'待配對'}</small>`:''}</span></div>`).join('')+(cfg.lineApiBase?`<p class="hint">只有加入此帳本的成員可以查看與記帳。${g.canDelete?'使用上方「邀請成員」分享加入連結。':'由帳本建立者邀請新成員。'}</p>`:'<button id="addMember" class="quiet" style="margin-top:20px">＋ 加入成員</button>');if(cfg.lineApiBase){const pay=document.createElement('button');pay.textContent='設定我的收款資訊';pay.className='quiet';pay.onclick=()=>openPayment(g.id, g.members.find(m=>m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?.id);c.append(pay)}if(cfg.lineApiBase&&g.canDelete){const add=document.createElement('button');add.textContent='＋ 預設成員';add.className='quiet';add.onclick=()=>modal('預設成員',field('name','成員暱稱','','text','required maxlength="40"')+'<p class="hint">可先替此成員記帳，朋友登入 LINE 後再認領。</p>','新增成員',async f=>{await requireMemberVersion();const r=await api('addMember',{groupId:g.id,name:f.get('name')});state.groups[state.groups.findIndex(x=>x.id===g.id)]=r.group;persist();render()});c.append(add)}if(!cfg.lineApiBase){$('addMember').onclick=()=>modal('新增成員',field('name','成員暱稱','','text','required maxlength="40"'),'加入',async f=>{const n=f.get('name').trim();if(!n||g.members.some(m=>m.name===n))throw Error('請輸入不同的暱稱');const next=structuredClone(g);next.members.push({id:uid(),name:n});await commit(next)})}}else{const b=balances(g),p=plan(g);c.innerHTML=mySettlement(g,p)+'<div class="balance-board">'+balanceRows(g,b)+'</div>'+suggestedTransfers(g,p,c)+repaymentHistory(g,c);c.querySelectorAll('[data-balance-member]').forEach(button=>{button.onclick=()=>showBalanceDetails(button.dataset.balanceMember)});
  c.querySelectorAll('[data-settle]').forEach(button=>{
   button.onclick=()=>{
    const transfer=p[Number(button.dataset.settle)];
@@ -289,7 +409,10 @@ async function requireMemberVersion(){try{const cap=await api('capabilities');if
 async function invite(){const g=group();if(!g.cloud){if(!cloud()){toast(cfg.lineApiBase?'請先點右上角 LINE 登入':'請先點右上角 Google 共用登入，即可免費共用帳本');return}modal('啟用多人共用','<p>將這本帳本上傳至雲端，之後可透過邀請連結加入。</p>','啟用共用',async()=>{const r=await api('create',{group:g});state.groups[state.groups.findIndex(x=>x.id===g.id)]=r.group;persist();render();toast('已啟用共用，請再點邀請成員')});return}try{if(cfg.lineApiBase)await requireMemberVersion();const {invite}=await api('invite',{groupId:g.id});const url=new URL(location.href);url.search='';url.hash='join='+invite;const text=`邀請你加入「${g.name}」帳本\n${url.href}`;if(ready&&liff.isApiAvailable('shareTargetPicker')){await liff.shareTargetPicker([{type:'text',text}])}else{try{await navigator.clipboard.writeText(text);toast('邀請連結已複製，可貼到 LINE 給成員')}catch{modal('分享邀請連結',`<p>將以下連結傳給要加入此帳本的朋友。</p><label for="inviteLink">邀請連結</label><input id="inviteLink" readonly value="${esc(url.href)}"><p class="hint">長按連結即可複製。只有加入此帳本的人才能查看內容。</p>`,'完成',async()=>{})}}}catch(e){toast(e.message)}}
 function exportCSV(){const g=group();const rows=[['日期','項目','幣別','原幣金額','匯率（TWD/原幣）','台幣金額','付款人','分攤成員'],...g.expenses.map(e=>[e.date,e.title,e.currency,e.amount,e.rate,(e.baseCents/100).toFixed(2),name(g,e.payer),e.split.map(id=>name(g,id)).join('、')])];const safe=s=>/^[=+@\-\t\r]/.test(String(s))?"'"+s:String(s);const blob=new Blob(['\ufeff'+rows.map(r=>r.map(s=>'"'+safe(s).replace(/"/g,'""')+'"').join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=g.name.replace(/[\\/:*?"<>|]/g,'_')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 async function initLINE(){if(!cfg.liffId)return;try{await (window.lineReady||(window.lineReady=liff.init({liffId:cfg.liffId})));ready=true;if(liff.isLoggedIn()){profile=await liff.getProfile();if(!cfg.lineApiBase)$('login').textContent=profile.displayName}}catch(e){toast('LINE 連線失敗：'+e.message)}}
-async function syncCloud(){if(!cloud())return;const syncingUser=window.WarmCloud.user().uid;const {groups}=await api('list');if(window.WarmCloud.user()?.uid!==syncingUser)return;state.groups=[...state.groups.filter(g=>!g.cloud),...groups];if(!group())state.current=activeGroups()[0]?.id;persist();render()}
+async function syncCloud(){if(!cloud())return;const syncingUser=window.WarmCloud.user().uid;const {groups}=await api('list');if(window.WarmCloud.user()?.uid!==syncingUser)return;state.groups=[...state.groups.filter(g=>!g.cloud),...groups];if(!group()){
+ const remembered=readPreference('current');
+ state.current=(activeGroups().find(g=>g.id===remembered)||activeGroups()[0])?.id;
+}persist();render()}
 async function joinInvitation(){if(!location.hash.startsWith('#join='))return;if(!cloud()){toast('收到邀請，請先登入再選擇自己的角色');return}const token=location.hash.slice(6);try{let roles=[],title='加入朋友的帳本';if(cfg.lineApiBase){await requireMemberVersion();const p=await api('previewInvite',{invite:token});roles=p.roles;title=p.name; if(p.alreadyJoined)roles=[]}modal('加入：'+title,(roles.length?'<p>請選擇你自己，原有的費用與餘額會保留。</p>'+roles.map(m=>`<label class="check"><input type="radio" name="memberId" required value="${esc(m.id)}">${esc(m.name)}</label>`).join(''):'<p>以目前登入的帳號加入此帳本。</p>')+(cfg.lineApiBase?'<p class="hint">LINE 名稱與頭像會顯示給此帳本的成員。</p>':''),'確認加入',async f=>{const {group:g}=await api('join',{invite:token,memberId:f.get('memberId')||undefined});state.groups=state.groups.filter(x=>x.id!==g.id);state.groups.push(g);state.current=g.id;persist();history.replaceState(null,'',location.pathname);render()})}catch(e){toast(e.message)}}
 function selectAfterDelete(){if(!group())state.current=activeGroups()[0]?.id;persist();render()}
 function deleteBook(){const g=group();if(!g)return;modal('刪除帳本',`<p>將「${esc(g.name)}」移至已刪除帳本？</p><p class="hint">${g.cloud?'這會影響所有共用成員，僅建立者可以刪除及還原。':'此帳本將從目前清單移除。'}費用與還款紀錄會保留，可從「已刪除帳本」還原。</p>`,'移至已刪除帳本',async()=>{const next=structuredClone(g);next.deletedAt=Date.now();await commit(next);selectAfterDelete();toast('帳本已刪除，可從已刪除帳本還原')})}
@@ -297,9 +420,9 @@ function showTrash(){const deleted=state.groups.filter(g=>g.deletedAt&&(!cfg.lin
 $('revokeInvites').onclick=()=>{const g=group();modal('停用既有邀請','<p>停用後，之前產生的邀請連結都無法再加入帳本。已加入的成員不受影響，之後可產生新邀請。</p>','停用邀請',async()=>{await api('revokeInvites',{groupId:g.id});toast('既有邀請已停用')})};$('deleteBook').onclick=deleteBook;$('trash').onclick=showTrash;
 window.addEventListener('warm-auth',async e=>{const u=e.detail;if(cfg.lineApiBase)$('cloudLogin').hidden=true;$('cloudLogin').textContent=u?'Google：'+u.name:'Google 共用登入';$('status').textContent=u?'已連線':cfg.lineApiBase?'尚未登入':'本機帳本';if(cfg.lineApiBase)$('login').textContent=u?'LINE：'+u.name:'LINE 登入';if(cfg.lineApiBase){state.groups=state.groups.filter(g=>!g.cloud);state.current=null;render()}if(!u){state.groups=state.groups.filter(g=>!g.cloud);if(!group())state.current=activeGroups()[0]?.id;persist();render();return}try{await syncCloud();$('storageNote').textContent=cfg.lineApiBase?'LINE 登入即可共用帳本。點「同步」取得成員最新紀錄。':'舊版帳本：請從「舊帳本移轉」匯出，原資料仍保留。';joinInvitation()}catch(e){toast(e.message)}});
 $('cloudLogin').onclick=async()=>{if(!window.WarmCloud){toast('雲端模組載入中，請稍後再試');return}if(cloud()){modal('Google 共用帳戶','<p>目前已登入，可以共用帳本。登出只會移除此瀏覽器的共用帳本快取，雲端資料仍保留。</p>','登出 Google',async()=>{await window.WarmCloud.logout()});return}try{await window.WarmCloud.login()}catch(e){toast(e.message)}};
-$('refresh').onclick=async()=>{if(!cloud()){toast(cfg.lineApiBase?'請先登入 LINE':'請先登入 Google');return}try{await syncCloud();toast('已同步最新帳本')}catch(e){toast(e.message)}};
+$('refresh').onclick=async()=>{if(!cloud()){toast(cfg.lineApiBase?'請先登入 LINE':'請先登入 Google');return}try{itineraryView=null;await syncCloud();toast('已同步最新帳本')}catch(e){toast(e.message)}};
 
-$('login').onclick=()=>{if(!cfg.liffId){toast('LINE 尚未設定，請先完成你的 LIFF 應用程式設定');return}if(!ready&&!cfg.lineApiBase){toast('LINE 初始化尚未成功，請重新整理後再試');return}if(cfg.lineApiBase){if(cloud()){modal('LINE 帳戶','<p>目前使用 LINE 帳號登入。每本帳本各自管理成員，你只會看到已加入的帳本。</p>',liff.isInClient()?'知道了':'登出 LINE',async()=>{if(!liff.isInClient())await window.WarmCloud.logout()});return}window.WarmCloud.login().catch(e=>toast(e.message));return}if(!liff.isLoggedIn())liff.login({redirectUri:location.href});else toast('你已登入 LINE')};$('settings').onclick=()=>modal('使用說明','<p>每本帳本分開管理成員。只有加入該帳本的人可以查看與記帳，建立者可邀請成員、停用邀請及刪除帳本。</p><p>外幣費用可逐筆設定匯率，結算以新台幣顯示。還款按鈕只記錄已付款，不會實際轉帳。</p><p class="hint">邀請連結不自動到期，請只傳給信任的人。可從帳本右上角「•••」同步資料、匯出或管理帳本。</p>','知道了',async()=>{});$('newGroup').onclick=$('emptyCreate').onclick=newGroup;$('close').onclick=()=>$('modal').close();$('addExpense').onclick=()=>editExpense();$('invite').onclick=invite;$('export').onclick=exportCSV;document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});if(cfg.lineApiBase){state.groups=state.groups.filter(g=>!g.cloud);state.current=null}render();initLINE();if(location.hash.startsWith('#join='))setTimeout(joinInvitation,1000);
+$('login').onclick=()=>{if(!cfg.liffId){toast('LINE 尚未設定，請先完成你的 LIFF 應用程式設定');return}if(!ready&&!cfg.lineApiBase){toast('LINE 初始化尚未成功，請重新整理後再試');return}if(cfg.lineApiBase){if(cloud()){modal('LINE 帳戶','<p>目前使用 LINE 帳號登入。每本帳本各自管理成員，你只會看到已加入的帳本。</p>',liff.isInClient()?'知道了':'登出 LINE',async()=>{if(!liff.isInClient())await window.WarmCloud.logout()});return}window.WarmCloud.login().catch(e=>toast(e.message));return}if(!liff.isLoggedIn())liff.login({redirectUri:location.href});else toast('你已登入 LINE')};$('settings').onclick=()=>modal('使用說明','<p>每本帳本分開管理成員。只有加入該帳本的人可以查看與記帳，建立者可邀請成員、停用邀請及刪除帳本。</p><p>外幣費用可逐筆設定匯率，結算以新台幣顯示。還款按鈕只記錄已付款，不會實際轉帳。</p><p class="hint">邀請連結不自動到期，請只傳給信任的人。可從帳本右上角「•••」同步資料、匯出或管理帳本。</p>','知道了',async()=>{});$('newGroup').onclick=$('emptyCreate').onclick=newGroup;$('close').onclick=()=>$('modal').close();$('addExpense').onclick=()=>editExpense();$('addItinerary').onclick=()=>editItinerary(group());$('pinTab').onclick=togglePinnedTab;$('invite').onclick=invite;$('export').onclick=exportCSV;document.querySelector('[data-tab="itinerary"]').hidden=!cfg.lineApiBase;document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});if(cfg.lineApiBase){state.groups=state.groups.filter(g=>!g.cloud);state.current=null}render();initLINE();if(location.hash.startsWith('#join='))setTimeout(joinInvitation,1000);
 
 document.addEventListener('click',e=>{document.querySelectorAll('.book-menu[open]').forEach(menu=>{if(!menu.contains(e.target)||e.target.closest('button'))menu.open=false})});
 

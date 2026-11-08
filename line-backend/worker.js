@@ -9,8 +9,64 @@ function applyLineProfile(member, verified) {
  if(picture.length<=2048&&/^https:\/\/profile\.line-scdn\.net\/[a-zA-Z0-9_/?&=.%+~-]+$/.test(picture))member.linePicture=picture;
  else delete member.linePicture;
 }
+async function itinerary(db, bookId, user, body){
+ // Keep notes outside the shared book payload. D1 returns private notes only to their author.
+ await db.prepare(`CREATE TABLE IF NOT EXISTS book_itinerary (
+  book_id TEXT NOT NULL, id TEXT NOT NULL, author TEXT NOT NULL,
+  date TEXT NOT NULL, time TEXT NOT NULL, place TEXT NOT NULL,
+  note TEXT NOT NULL, private_note INTEGER NOT NULL, revision TEXT NOT NULL,
+  PRIMARY KEY (book_id, id)
+ )`).run();
+ if(body.action==='listItinerary'){
+  const {results}=await db.prepare(`SELECT id, date, time, place,
+   CASE WHEN private_note=0 OR author=?1 THEN note ELSE '' END AS note,
+   CASE WHEN author=?1 THEN private_note ELSE 0 END AS privateNote,
+   author=?1 AS canEdit, CASE WHEN author=?1 THEN revision ELSE '' END AS revision
+   FROM book_itinerary WHERE book_id=?2
+   ORDER BY date, time='', time, id`).bind(user,bookId).all();
+  return {items:results.map(item=>({...item,privateNote:!!item.privateNote,canEdit:!!item.canEdit}))};
+ }
+
+ const {id,revision}=body;
+ if(!validId(id)||typeof revision!=='string'||(revision!==''&&!validId(revision)))fail('行程編號無效');
+ if(body.action==='deleteItinerary'){
+  const result=await db.prepare(`DELETE FROM book_itinerary
+   WHERE book_id=? AND id=? AND author=? AND revision=?`).bind(bookId,id,user,revision).run();
+  if(!result.meta.changes)fail('行程已變更或無權限，請重新載入',409);
+  return {ok:true};
+ }
+
+ const {date,time,privateNote}=body;
+ const place=typeof body.place==='string'?body.place.trim():'';
+ const note=typeof body.note==='string'?body.note.trim():null;
+ const parsed=typeof date==='string'?new Date(date+'T00:00:00Z'):null;
+ if(!parsed||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(+parsed)||parsed.toISOString().slice(0,10)!==date
+  ||typeof time!=='string'||(time!==''&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(time))
+  ||!place||place.length>120||note===null||note.length>1000||typeof privateNote!=='boolean')fail('請確認行程的日期、時間、地點與備註');
+ const nextRevision=crypto.randomUUID();
+ const values=[date,time,place,note,Number(privateNote),nextRevision];
+ if(!revision){
+  const result=await db.prepare(`INSERT OR IGNORE INTO book_itinerary
+   (book_id,id,author,date,time,place,note,private_note,revision) VALUES(?,?,?,?,?,?,?,?,?)`)
+   .bind(bookId,id,user,...values).run();
+  if(result.meta.changes)return {ok:true};
+  const prior=await db.prepare(`SELECT 1 AS same FROM book_itinerary WHERE book_id=? AND id=? AND author=?
+   AND date=? AND time=? AND place=? AND note=? AND private_note=?`).bind(bookId,id,user,...values.slice(0,5)).first();
+  if(prior)return {ok:true};
+ }else{
+  const result=await db.prepare(`UPDATE book_itinerary SET date=?,time=?,place=?,note=?,private_note=?,revision=?
+   WHERE book_id=? AND id=? AND author=? AND revision=?`).bind(...values,bookId,id,user,revision).run();
+  if(result.meta.changes)return {ok:true};
+ }
+ fail('行程已變更或無權限，請重新載入',409);
+}
 function payload(g){const {canDelete,owner,access,joinToken,...rest}=g;return rest}
 export default {async fetch(req,env){const headers={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Content-Type':'application/json','Cache-Control':'no-store'};const reply=(o,status=200)=>new Response(JSON.stringify(o),{status,headers});if(req.method==='OPTIONS')return new Response(null,{status:204,headers});if(req.method!=='POST')return reply({error:'Method not allowed'},405);try{if(req.headers.get('Origin')&&req.headers.get('Origin')!==env.APP_ORIGIN)fail('來源不允許',403);const raw=await req.text();if(raw.length>750000)fail('資料過大',413);const b=JSON.parse(raw);const token=req.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>10000)fail('請登入 LINE',401);const verification=await fetch('https://api.line.me/oauth2/v2.1/verify',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id_token:token,client_id:env.LINE_CHANNEL_ID})});const v=await verification.json();if(!verification.ok||!v.sub)fail('LINE 登入已過期，請重新登入',401);const user=v.sub,db=env.DB;const output=r=>({...JSON.parse(r.data),version:r.version,cloud:true,canDelete:r.owner===user});const load=async id=>{if(!validId(id))fail('帳本編號無效');const r=await db.prepare('SELECT b.* FROM books b JOIN memberships m ON m.book_id=b.id WHERE b.id=? AND m.user_id=?').bind(id,user).first();if(!r)fail('無權存取帳本',403);return r};
+if(['listItinerary','saveItinerary','deleteItinerary'].includes(b.action)){
+ const book=await load(b.groupId);
+ if(JSON.parse(book.data).deletedAt)fail('帳本已刪除',403);
+ return reply(await itinerary(db,book.id,user,b));
+}
 if(b.action==='capabilities')return reply({membershipVersion:3,mediaVersion:1,paymentVersion:2});
 if(['getExpenseImages','saveExpenseImages','getPayment','savePayment'].includes(b.action)){
  const r=await load(b.groupId),g=JSON.parse(r.data);if(g.deletedAt)fail('帳本已刪除',403);
