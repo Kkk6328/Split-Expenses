@@ -47,7 +47,7 @@ test('itinerary uses book membership, protects private notes and checks author r
  assert.equal(own.privateNote,true);
  assert.equal(own.canEdit,true);
  const {items}=await api('friend','listItinerary');
- assert.deepEqual(items,[{id:'stop',date:record.date,time:record.time,place:record.place,
+ assert.deepEqual(items,[{id:'stop',date:record.date,time:record.time,endTime:'',place:record.place,
   sharedNote:'',personalNote:'',note:'',privateNote:false,canEdit:false,revision:''}]);
  await api('outsider','listItinerary',{},403);
  await api('owner','listItinerary',{groupId:'deleted'},403);
@@ -77,6 +77,22 @@ test('itinerary uses book membership, protects private notes and checks author r
  const {items:[privateOnly]}=await api('owner','listItinerary');
  assert.equal(privateOnly.sharedNote,'');
  assert.equal(privateOnly.personalNote,dual.personalNote);
- await api('owner','deleteItinerary',{id:record.id,revision:privateOnly.revision});
- assert.deepEqual(await api('friend','listItinerary'),{items:[],notesVersion:2});
+ const range={...dual,revision:privateOnly.revision,endTime:'17:30'};
+ for(const invalid of [{time:''},{endTime:'15:30'},{endTime:range.time},{endTime:'24:00'}])
+  await api('owner','saveItinerary',{...range,...invalid},400);
+ await api('owner','saveItinerary',range);
+ const {items:[ranged],timeRangeVersion}=await api('owner','listItinerary');
+ assert.equal(timeRangeVersion,1);
+ assert.equal(ranged.time,range.time);
+ assert.equal(ranged.endTime,range.endTime);
+ const {items:[memberRange]}=await api('friend','listItinerary');
+ assert.equal(memberRange.endTime,range.endTime);
+ assert.equal(memberRange.personalNote,'');
+ await api('owner','saveItinerary',{...dual,revision:ranged.revision},409);
+ await api('owner','saveItinerary',{...range,revision:ranged.revision,endTime:''});
+ const {items:[cleared]}=await api('owner','listItinerary');
+ assert.equal(cleared.endTime,'');
+ assert.equal(cleared.time,range.time);
+ await api('owner','deleteItinerary',{id:record.id,revision:cleared.revision});
+ assert.deepEqual(await api('friend','listItinerary'),{items:[],notesVersion:2,timeRangeVersion:1});
 });

@@ -220,8 +220,9 @@ function renderItinerary(g,c){
  if(itineraryView?.book!==g.id||itineraryView.account!==account){
   const view={book:g.id,account,items:null};
   itineraryView=view;
-  api('listItinerary',{groupId:g.id}).then(({items,notesVersion})=>{
+  api('listItinerary',{groupId:g.id}).then(({items,notesVersion,timeRangeVersion})=>{
    view.notesReady=notesVersion===2;
+   view.timeRangeReady=timeRangeVersion===1;
    view.items=view.notesReady?items:items.map(item=>({...item,
     sharedNote:item.privateNote?'':item.note,personalNote:item.privateNote?item.note:''
    }));
@@ -262,8 +263,8 @@ function renderItinerary(g,c){
    ${entries.map(item=>{
     const editable=notesReady&&item.canEdit;
     const tag=editable?'button':'article';
-    return `<${tag} class="itinerary-item"${editable?` type="button" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}"`:''}>
-     <time datetime="${esc(item.date+(item.time?'T'+item.time:''))}">${item.time?esc(item.time):'未定時間'}</time>
+    return `<${tag} class="itinerary-item${item.endTime?' has-time-range':''}"${editable?` type="button" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}"`:''}>
+     <span class="itinerary-clock">${item.time?`<time datetime="${esc(item.date+'T'+item.time)}">${esc(item.time)}</time>`:'未定時間'}${item.endTime?`–<time datetime="${esc(item.date+'T'+item.endTime)}">${esc(item.endTime)}</time>`:''}</span>
      <span><strong>${esc(item.place)}</strong>
       ${item.sharedNote?`<span class="itinerary-item-note"><small>所有成員可見</small>${esc(item.sharedNote)}</span>`:''}
       ${item.personalNote?`<span class="itinerary-item-note"><small>🔒 僅自己可見</small>${esc(item.personalNote)}</span>`:''}
@@ -288,8 +289,13 @@ function renderItinerary(g,c){
 function editItinerary(g,item){
  if(!g||!itineraryView?.notesReady)return;
  const id=item?.id||uid();
+ const {timeRangeReady}=itineraryView;
+ const start=field('time','開始時間（選填）',item?.time||'','time');
+ const timing=timeRangeReady?`<div class="itinerary-time-fields"><div>${start}</div><div>${
+  field('endTime','結束時間（選填）',item?.endTime||'','time')
+ }</div></div>`:start+'<p class="hint">更新後端後即可設定結束時間。</p>';
  const form=field('date','日期',item?.date||itineraryDay||today(),'date','required')+
-  field('time','時間（選填）',item?.time||'','time')+
+  timing+
   field('place','地點',item?.place||'','text','required maxlength="120" placeholder="例如：廣藏市場"')+
   `<label for="itinerarySharedNote">備註（所有成員可見）</label>
   <textarea class="itinerary-note" id="itinerarySharedNote" name="sharedNote" rows="3" maxlength="1000">${esc(item?.sharedNote||'')}</textarea>
@@ -306,9 +312,10 @@ function editItinerary(g,item){
  modal(item?'編輯行程':'新增行程',form,'儲存行程',async f=>{
   const place=f.get('place').trim();
   if(!place)throw Error('請填寫地點');
-  const date=f.get('date');
-  await api('saveItinerary',{groupId:g.id,id,revision:item?.revision||'',date,
-   time:f.get('time'),place,sharedNote:f.get('sharedNote').trim(),personalNote:f.get('personalNote').trim()});
+  const date=f.get('date'),time=f.get('time'),endTime=f.get('endTime');
+  if(endTime&&(!time||endTime<=time))throw Error('結束時間須晚於同一天的開始時間');
+  await api('saveItinerary',{groupId:g.id,id,revision:item?.revision||'',date,time,place,
+   ...(timeRangeReady?{endTime}:{}),sharedNote:f.get('sharedNote').trim(),personalNote:f.get('personalNote').trim()});
   reload(date);
   toast('行程已儲存');
  });

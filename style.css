@@ -297,7 +297,11 @@ dialog:modal{
  overflow-wrap: anywhere;
 }
 button.itinerary-item:hover { background: var(--soft); }
-.itinerary-item time, .itinerary-item small, .itinerary-edit { color: var(--muted); font-size: 12px; }
+.itinerary-item.has-time-range { grid-template-columns: 5.5rem minmax(0,1fr) auto; }
+.itinerary-clock { white-space: nowrap; }
+.itinerary-clock, .itinerary-item small, .itinerary-edit { color: var(--muted); font-size: 12px; }
 .itinerary-item small { display: block; }
 .itinerary-item-note { display: block; margin-top: 5px; white-space: pre-wrap; }
 .itinerary-note { display: block; width: 100%; resize: vertical; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.itinerary-time-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.itinerary-time-fields input { min-width: 0; width: 100%; }
