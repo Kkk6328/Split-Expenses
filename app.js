@@ -247,7 +247,7 @@ function itineraryTransportMarkup(options){
  const matches=options.filter(option=>isCarTransport(option)===(itineraryTransportMode==='car'));
  return (matches.length?matches:options).map(option=>{
   const korean=koreanSubwayRoute(option.method);
-  const details=[['交通方式',option.method],['交通時間',option.duration],['交通金額',option.cost]]
+  const details=[['交通時間',option.duration],['交通金額',option.cost],['交通備註',option.method]]
    .filter(([,value])=>value).map(([label,value])=>`<span><small>${label}</small>${esc(value)}</span>`).join('');
   return `<span class="itinerary-transport">${details}${korean?
    `<span class="itinerary-transit-korean"><small>韓文對照</small><span lang="ko">${esc(korean)}</span></span>`:''}</span>`;
@@ -362,13 +362,15 @@ function editItinerary(g,item){
   const option=mode==='car'?car:transit;
   const placeholder=mode==='car'?'例如：計程車':'例如：地鐵 4 號線 → 明洞站';
   return `<div id="itinerary-transport-${mode}"${mode===activeMode?'':' hidden'}>
-   <input id="f-transportMethod${index}" name="transportMethod${index}" value="${esc(option?.method||'')}" maxlength="240" placeholder="${placeholder}">
    <div class="itinerary-time-fields"><div>${field('transportDuration'+index,'交通時間',option?.duration||'','text','maxlength="80" placeholder="例如：19 分鐘"')}</div>
-   <div>${field('transportCost'+index,'交通金額',option?.cost||'','text','maxlength="100" placeholder="例如：₩1,550／人"')}</div></div></div>`;
+   <div>${field('transportCost'+index,'交通金額',option?.cost||'','text','maxlength="100" placeholder="例如：₩1,550／人"')}</div></div>
+   <label for="f-transportMethod${index}">交通備註</label>
+   <textarea class="itinerary-note itinerary-note-fit" id="f-transportMethod${index}" name="transportMethod${index}" rows="1" maxlength="240" placeholder="${placeholder}">${esc(option?.method||'')}</textarea>
+  </div>`;
  };
  const transportDetails=transportReady?`<fieldset class="itinerary-transport-editor"><legend>前往這一站的交通（選填）</legend>
   <div class="itinerary-transport-editor-header">
-   ${transportModes.map(([mode],index)=>`<label for="f-transportMethod${index}"${mode===activeMode?'':' hidden'}>交通方式</label>`).join('')}
+   <span>交通方式</span>
    <div class="itinerary-transport-modes" role="group" aria-label="切換交通方案">
     ${transportModes.map(([mode,label])=>`<button type="button" class="quiet" aria-controls="itinerary-transport-${mode}" aria-pressed="${mode===activeMode}">${label}</button>`).join('')}
    </div>
@@ -379,9 +381,9 @@ function editItinerary(g,item){
   field('place','地點名稱',item?.place||'','text','required maxlength="120" placeholder="例如：廣藏市場"')+
   placeDetails+transportDetails+
   `<label for="itinerarySharedNote">備註（所有成員可見）</label>
-  <textarea class="itinerary-note" id="itinerarySharedNote" name="sharedNote" rows="3" maxlength="1000">${esc(item?.sharedNote||'')}</textarea>
+  <textarea class="itinerary-note itinerary-note-fit" id="itinerarySharedNote" name="sharedNote" rows="1" maxlength="1000">${esc(item?.sharedNote||'')}</textarea>
   <label for="itineraryPersonalNote">🔒 備註（僅自己可見）</label>
-  <textarea class="itinerary-note" id="itineraryPersonalNote" name="personalNote" rows="3" maxlength="1000">${esc(item?.personalNote||'')}</textarea>
+  <textarea class="itinerary-note itinerary-note-fit" id="itineraryPersonalNote" name="personalNote" rows="1" maxlength="1000">${esc(item?.personalNote||'')}</textarea>
   <p class="hint">地點資訊與共用備註會顯示給此帳本的成員。</p>`+
   (item?'<button type="button" id="deleteItinerary" class="quiet danger">刪除行程</button>':'');
  const reload=(date=itineraryDay)=>{
@@ -403,7 +405,7 @@ function editItinerary(g,item){
   if(transport&&!Object.values(transport[0]).some(Boolean)&&Object.values(transport[1]).some(Boolean)&&!isCarTransport(transport[1])){
    const option=transport[1];
    option.method=option.method?`搭車：${option.method}`:'搭車';
-   if(option.method.length>240)throw Error('搭車的交通方式請縮短至 237 字以內');
+   if(option.method.length>240)throw Error('搭車的交通備註請縮短至 237 字以內');
   }
   await api('saveItinerary',{groupId:g.id,id,revision:item?.revision||'',date,time,place,
    ...(transportReady?{transport}:{}),
@@ -413,17 +415,29 @@ function editItinerary(g,item){
   reload(date);
   toast('行程已儲存');
  });
+ const fields=$('fields');
+ const fitNotes=()=>{
+  if(CSS.supports('field-sizing','content'))return;
+  fields.querySelectorAll('.itinerary-note-fit').forEach(note=>{
+   if(!note.offsetWidth)return;
+   note.style.height='auto';
+   note.style.height=`${note.scrollHeight+note.offsetHeight-note.clientHeight}px`;
+  });
+ };
+ fields.querySelectorAll('.itinerary-note-fit').forEach(note=>note.oninput=fitNotes);
+ fitNotes();
  if(transportReady){
-  const editor=$('fields').querySelector('.itinerary-transport-editor');
+  const editor=fields.querySelector('.itinerary-transport-editor');
   const buttons=[...editor.querySelectorAll('button[aria-controls]')];
-  const labels=[...editor.querySelector('.itinerary-transport-editor-header').querySelectorAll('label')];
   buttons.forEach(button=>{
-   button.onclick=()=>buttons.forEach((option,index)=>{
-    const selected=option===button;
-    option.setAttribute('aria-pressed',String(selected));
-    labels[index].hidden=!selected;
-    $(option.getAttribute('aria-controls')).hidden=!selected;
-   });
+   button.onclick=()=>{
+    buttons.forEach(option=>{
+     const selected=option===button;
+     option.setAttribute('aria-pressed',String(selected));
+     $(option.getAttribute('aria-controls')).hidden=!selected;
+    });
+    fitNotes();
+   };
   });
  }
  if(item)$('deleteItinerary').onclick=()=>{

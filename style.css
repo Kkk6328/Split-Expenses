@@ -300,16 +300,19 @@ button.itinerary-item:hover { background: var(--soft); }
 .itinerary-place-detail { color: var(--muted); font-size: 13px; }
 .itinerary-place-detail small { display: inline; font-weight: 600; margin-inline-end: 6px; }
 .itinerary-note { display: block; width: 100%; resize: vertical; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.itinerary-note-fit { field-sizing: content; min-height: 46px; overflow: hidden; resize: none; }
+@media(max-width:760px) { .itinerary-note-fit { font-size: 16px; } }
 .itinerary-time-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
 .itinerary-time-fields input { min-width: 0; width: 100%; }
 
 .itinerary-transport { display: block; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; font-size: 13px; }
-.itinerary-transport > span { display: block; }
+.itinerary-transport > span { display: block; white-space: pre-wrap; }
 .itinerary-transport small { display: inline; font-weight: 600; margin-inline-end: 6px; }
 .itinerary-transport-editor { min-width: 0; margin: 14px 0 0; padding: 4px 10px 10px; border: 1px solid var(--line); border-radius: 8px; }
 .itinerary-transport-editor legend { font-size: 13px; color: var(--muted); }
 .itinerary-transport-editor-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
-.itinerary-transport-editor-header label { margin: 0; }
+.itinerary-transport-editor-header > span { font-size: 13px; font-weight: 500; }
+.itinerary-transport-editor .itinerary-time-fields label { margin-top: 8px; }
 
 .itinerary-transport-modes { display: flex; gap: 6px; margin: 0 0 14px; }
 .itinerary-transport-modes button { padding: 4px 12px; min-height: 36px; font-size: 13px; }
