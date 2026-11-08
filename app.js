@@ -220,12 +220,17 @@ function renderItinerary(g,c){
  if(itineraryView?.book!==g.id||itineraryView.account!==account){
   const view={book:g.id,account,items:null};
   itineraryView=view;
-  api('listItinerary',{groupId:g.id}).then(({items})=>{view.items=items}).catch(error=>{
+  api('listItinerary',{groupId:g.id}).then(({items,notesVersion})=>{
+   view.notesReady=notesVersion===2;
+   view.items=view.notesReady?items:items.map(item=>({...item,
+    sharedNote:item.privateNote?'':item.note,personalNote:item.privateNote?item.note:''
+   }));
+  }).catch(error=>{
    view.error=error.message==='未知操作'?'行程功能等待後端更新。':error.message;
   }).finally(()=>{if(itineraryView===view&&tab==='itinerary'&&group()?.id===g.id)render()});
  }
- const {items,error}=itineraryView;
- $('addItinerary').disabled=!items;
+ const {items,error,notesReady}=itineraryView;
+ $('addItinerary').disabled=!notesReady;
  if(error){
   c.innerHTML=`<p class="hint" role="alert">${esc(error)}</p><button type="button" id="retryItinerary" class="quiet">重新載入</button>`;
   $('retryItinerary').onclick=()=>{itineraryView=null;render()};
@@ -235,8 +240,9 @@ function renderItinerary(g,c){
   c.innerHTML='<p class="hint" role="status">載入行程中…</p>';
   return;
  }
+ const notice=notesReady?'':'<p class="hint" role="status">新版備註等待後端更新，現有行程可以查看。</p>';
  if(!items.length){
-  c.innerHTML='<div class="empty"><div class="empty-symbol" aria-hidden="true">📍</div><p>還沒有行程，點「新增行程」記下第一站。</p></div>';
+  c.innerHTML=notice+(notesReady?'<div class="empty"><div class="empty-symbol" aria-hidden="true">📍</div><p>還沒有行程，點「新增行程」記下第一站。</p></div>':'');
   return;
  }
  const days=new Map();
@@ -244,26 +250,30 @@ function renderItinerary(g,c){
   if(!days.has(item.date))days.set(item.date,[]);
   days.get(item.date).push(item);
  }
- c.innerHTML=[...days].map(([date,entries])=>`<section class="itinerary-day"><h3>${esc(date)}</h3>${entries.map(item=>`
+ c.innerHTML=notice+[...days].map(([date,entries])=>`<section class="itinerary-day"><h3>${esc(date)}</h3>${entries.map(item=>`
   <article class="itinerary-item">
    <time datetime="${esc(item.date+(item.time?'T'+item.time:''))}">${item.time?esc(item.time):'未定時間'}</time>
-   <div><strong>${esc(item.place)}</strong>${item.note?`<p><small>${item.privateNote?'🔒 僅自己可見':'備註'}</small>${esc(item.note)}</p>`:''}</div>
-   ${item.canEdit?`<button type="button" class="quiet" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}">編輯</button>`:''}
+   <div><strong>${esc(item.place)}</strong>
+    ${item.sharedNote?`<p><small>所有成員可見</small>${esc(item.sharedNote)}</p>`:''}
+    ${item.personalNote?`<p><small>🔒 僅自己可見</small>${esc(item.personalNote)}</p>`:''}
+   </div>
+   ${notesReady&&item.canEdit?`<button type="button" class="quiet" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}">編輯</button>`:''}
   </article>`).join('')}</section>`).join('');
  c.querySelectorAll('[data-itinerary]').forEach(button=>{
   button.onclick=()=>editItinerary(g,items.find(item=>item.id===button.dataset.itinerary));
  });
 }
 function editItinerary(g,item){
- if(!g)return;
+ if(!g||!itineraryView?.notesReady)return;
  const id=item?.id||uid();
  const form=field('date','日期',item?.date||today(),'date','required')+
   field('time','時間（選填）',item?.time||'','time')+
   field('place','地點',item?.place||'','text','required maxlength="120" placeholder="例如：廣藏市場"')+
-  `<label for="itineraryNote">備註（選填）</label><textarea id="itineraryNote" name="note" rows="3" maxlength="1000">${esc(item?.note||'')}</textarea>
-  <label for="itineraryVisibility">備註誰可以看？</label><select id="itineraryVisibility" name="visibility">
-   <option value="shared">帳本成員可見</option><option value="private"${item?.privateNote?' selected':''}>僅自己可見</option>
-  </select><p class="hint">日期、時間與地點會顯示給此帳本的成員。</p>`+
+  `<label for="itinerarySharedNote">備註（所有成員可見）</label>
+  <textarea class="itinerary-note" id="itinerarySharedNote" name="sharedNote" rows="3" maxlength="1000">${esc(item?.sharedNote||'')}</textarea>
+  <label for="itineraryPersonalNote">🔒 備註（僅自己可見）</label>
+  <textarea class="itinerary-note" id="itineraryPersonalNote" name="personalNote" rows="3" maxlength="1000">${esc(item?.personalNote||'')}</textarea>
+  <p class="hint">兩格都可選填。日期、時間與地點會顯示給此帳本的成員。</p>`+
   (item?'<button type="button" id="deleteItinerary" class="quiet danger">刪除行程</button>':'');
  const reload=()=>{
   if(group()?.id!==g.id)return;
@@ -274,7 +284,7 @@ function editItinerary(g,item){
   const place=f.get('place').trim();
   if(!place)throw Error('請填寫地點');
   await api('saveItinerary',{groupId:g.id,id,revision:item?.revision||'',date:f.get('date'),
-   time:f.get('time'),place,note:f.get('note').trim(),privateNote:f.get('visibility')==='private'});
+   time:f.get('time'),place,sharedNote:f.get('sharedNote').trim(),personalNote:f.get('personalNote').trim()});
   reload();
   toast('行程已儲存');
  });

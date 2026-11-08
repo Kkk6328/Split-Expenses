@@ -19,12 +19,17 @@ async function itinerary(db, bookId, user, body){
  )`).run();
  if(body.action==='listItinerary'){
   const {results}=await db.prepare(`SELECT id, date, time, place,
-   CASE WHEN private_note=0 OR author=?1 THEN note ELSE '' END AS note,
-   CASE WHEN author=?1 THEN private_note ELSE 0 END AS privateNote,
+   CASE private_note WHEN 0 THEN note WHEN 2 THEN json_extract(note,'$.shared') ELSE '' END AS sharedNote,
+   CASE WHEN author=?1 THEN
+    CASE private_note WHEN 1 THEN note WHEN 2 THEN json_extract(note,'$.personal') ELSE '' END
+    ELSE '' END AS personalNote,
    author=?1 AS canEdit, CASE WHEN author=?1 THEN revision ELSE '' END AS revision
    FROM book_itinerary WHERE book_id=?2
    ORDER BY date, time='', time, id`).bind(user,bookId).all();
-  return {items:results.map(item=>({...item,privateNote:!!item.privateNote,canEdit:!!item.canEdit}))};
+  return {notesVersion:2,items:results.map(item=>({...item,canEdit:!!item.canEdit,
+   // Old clients can still read a note, but cannot overwrite two-field records.
+   note:item.sharedNote||item.personalNote,privateNote:!item.sharedNote&&!!item.personalNote
+  }))};
  }
 
  const {id,revision}=body;
@@ -38,13 +43,26 @@ async function itinerary(db, bookId, user, body){
 
  const {date,time,privateNote}=body;
  const place=typeof body.place==='string'?body.place.trim():'';
- const note=typeof body.note==='string'?body.note.trim():null;
+ const dualNotes=Object.hasOwn(body,'sharedNote')||Object.hasOwn(body,'personalNote');
+ let note,mode;
+ if(dualNotes){
+  const {sharedNote,personalNote}=body;
+  if(typeof sharedNote!=='string'||typeof personalNote!=='string'
+   ||sharedNote.trim().length>1000||personalNote.trim().length>1000)fail('每格備註最多 1000 字');
+  // Mode 2 stores both notes in the existing column, keeping legacy rows readable without a D1 migration.
+  note=JSON.stringify({shared:sharedNote.trim(),personal:personalNote.trim()});
+  mode=2;
+ }else{
+  if(typeof body.note!=='string'||body.note.trim().length>1000||typeof privateNote!=='boolean')fail('備註格式錯誤');
+  note=body.note.trim();
+  mode=Number(privateNote);
+ }
  const parsed=typeof date==='string'?new Date(date+'T00:00:00Z'):null;
  if(!parsed||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(+parsed)||parsed.toISOString().slice(0,10)!==date
   ||typeof time!=='string'||(time!==''&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(time))
-  ||!place||place.length>120||note===null||note.length>1000||typeof privateNote!=='boolean')fail('請確認行程的日期、時間、地點與備註');
+  ||!place||place.length>120)fail('請確認行程的日期、時間、地點與備註');
  const nextRevision=crypto.randomUUID();
- const values=[date,time,place,note,Number(privateNote),nextRevision];
+ const values=[date,time,place,note,mode,nextRevision];
  if(!revision){
   const result=await db.prepare(`INSERT OR IGNORE INTO book_itinerary
    (book_id,id,author,date,time,place,note,private_note,revision) VALUES(?,?,?,?,?,?,?,?,?)`)
@@ -55,7 +73,8 @@ async function itinerary(db, bookId, user, body){
   if(prior)return {ok:true};
  }else{
   const result=await db.prepare(`UPDATE book_itinerary SET date=?,time=?,place=?,note=?,private_note=?,revision=?
-   WHERE book_id=? AND id=? AND author=? AND revision=?`).bind(...values,bookId,id,user,revision).run();
+   WHERE book_id=? AND id=? AND author=? AND revision=? AND (private_note<>2 OR ?=2)`)
+   .bind(...values,bookId,id,user,revision,mode).run();
   if(result.meta.changes)return {ok:true};
  }
  fail('行程已變更或無權限，請重新載入',409);

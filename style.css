@@ -288,4 +288,4 @@ dialog:modal{
 .itinerary-item small { display: block; }
 .itinerary-item p { margin: 5px 0 0; white-space: pre-wrap; }
 .itinerary-item button { min-height: 44px; }
-#itineraryNote { display: block; width: 100%; resize: vertical; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.itinerary-note { display: block; width: 100%; resize: vertical; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
