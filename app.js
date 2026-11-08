@@ -242,16 +242,27 @@ function koreanSubwayRoute(method){
 }
 const transportModes=[['transit','地鐵／步行'],['car','搭車']];
 const isCarTransport=option=>/計程車|計程|開車|自駕|機場接送|包車|搭車|taxi|uber/i.test(option?.method||'');
-function itineraryTransportMarkup(options){
- if(!options?.length)return '';
+function itineraryLegMarkup(previous,item){
+ const options=item.transport||[];
+ if(!previous&&!options.length)return '';
  const matches=options.filter(option=>isCarTransport(option)===(itineraryTransportMode==='car'));
- return (matches.length?matches:options).map(option=>{
-  const korean=koreanSubwayRoute(option.method);
-  const details=[['交通時間',option.duration],['交通金額',option.cost],['交通備註',option.method]]
-   .filter(([,value])=>value).map(([label,value])=>`<span><small>${label}</small>${esc(value)}</span>`).join('');
-  return `<span class="itinerary-transport">${details}${korean?
-   `<span class="itinerary-transit-korean"><small>韓文對照</small><span lang="ko">${esc(korean)}</span></span>`:''}</span>`;
+ const placeName=stop=>esc(stop.place.replace(/\s*[（(][^（）()]*[가-힣][^（）()]*[）)]$/u,''));
+ const routes=(matches.length?matches:options).map(option=>{
+  const {method,duration,cost}=option;
+  const korean=koreanSubwayRoute(method);
+  const mode=isCarTransport(option)?'搭車':/地鐵|\d+\s*號線/.test(method)?'地鐵':/步行|走路/.test(method)?'步行':'';
+  return `<div class="itinerary-leg-option">
+   <div class="itinerary-leg-facts"><strong class="${duration?'':'itinerary-leg-unset'}">${esc(duration||'未填交通時間')}</strong>${mode?`<span>${mode}</span>`:''}${cost?`<span>${esc(cost)}</span>`:''}</div>
+   ${method?`<details class="itinerary-leg-details"><summary>${korean?'路線與韓文對照':'交通詳情'}</summary>
+    <div class="itinerary-leg-method">${esc(method)}</div>${korean?`<div class="itinerary-transit-korean" lang="ko">${esc(korean)}</div>`:''}
+   </details>`:''}</div>`;
  }).join('');
+ return `<div class="itinerary-leg">
+  <span class="itinerary-leg-arrow" aria-hidden="true">↓</span>
+  <div class="itinerary-leg-body">
+   <div class="itinerary-leg-places">${previous?`${placeName(previous)} → `:'前往 '}<strong>${placeName(item)}</strong></div>
+   ${routes||'<div class="itinerary-leg-unset">未填交通時間</div>'}
+  </div></div>`;
 }
 function renderItinerary(g,c){
  const account=window.WarmCloud?.user()?.uid;
@@ -303,15 +314,14 @@ function renderItinerary(g,c){
  </div>`:'';
  c.innerHTML=notice+`<div class="itinerary-days" role="group" aria-label="行程日期">${options.join('')}</div>`+transportPicker+
   visibleDays.map(([date,entries])=>`<section class="itinerary-day"><h3>第 ${dayNumber(date)} 天 <span>${esc(date)}</span></h3>
-   ${entries.map(item=>{
+   ${entries.map((item,index)=>{
     const editable=notesReady&&item.canEdit;
     const tag=editable?'button':'article';
-    return `<${tag} class="itinerary-item${item.endTime?' has-time-range':''}"${editable?` type="button" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}"`:''}>
+    return `${itineraryLegMarkup(entries[index-1],item)}<${tag} class="itinerary-item${item.endTime?' has-time-range':''}"${editable?` type="button" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}"`:''}>
      <span class="itinerary-clock">${item.time?`<time datetime="${esc(item.date+'T'+item.time)}">${esc(item.time)}</time>`:'未定時間'}${item.endTime?`–<time datetime="${esc(item.date+'T'+item.endTime)}">${esc(item.endTime)}</time>`:''}</span>
      <span><strong>${esc(item.place)}</strong>
       ${item.address?`<span class="itinerary-place-detail"><small>地址</small>${esc(item.address)}</span>`:''}
       ${item.openingHours?`<span class="itinerary-place-detail"><small>營業時間</small>${esc(item.openingHours)}</span>`:''}
-      ${itineraryTransportMarkup(item.transport)}
       ${item.sharedNote?`<span class="itinerary-item-note"><small>所有成員可見</small>${esc(item.sharedNote)}</span>`:''}
       ${item.personalNote?`<span class="itinerary-item-note"><small>🔒 僅自己可見</small>${esc(item.personalNote)}</span>`:''}
      </span>

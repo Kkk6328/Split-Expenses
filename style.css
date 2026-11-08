@@ -305,9 +305,18 @@ button.itinerary-item:hover { background: var(--soft); }
 .itinerary-time-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
 .itinerary-time-fields input { min-width: 0; width: 100%; }
 
-.itinerary-transport { display: block; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; font-size: 13px; }
-.itinerary-transport > span { display: block; white-space: pre-wrap; }
-.itinerary-transport small { display: inline; font-weight: 600; margin-inline-end: 6px; }
+.itinerary-leg { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 8px 14px; padding: 8px 10px; border-inline-start: 2px solid #bdcedc; border-radius: 0 7px 7px 0; background: var(--soft); font-size: 13px; }
+.itinerary-leg-arrow { color: var(--green); font-weight: 700; }
+.itinerary-leg-body { min-width: 0; overflow-wrap: anywhere; }
+.itinerary-leg-places { color: var(--green); }
+.itinerary-leg-facts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--muted); }
+.itinerary-leg-facts strong { color: var(--ink); font-size: 15px; }
+.itinerary-leg-unset, .itinerary-leg-facts .itinerary-leg-unset { color: var(--muted); font-size: 12px; font-weight: 400; }
+.itinerary-leg-option + .itinerary-leg-option { margin-top: 6px; }
+.itinerary-leg-details summary { min-height: 32px; display: flex; align-items: center; gap: 4px; color: var(--green); font-size: 12px; }
+.itinerary-leg-details summary::before { content: '▸'; }
+.itinerary-leg-details[open] summary::before { content: '▾'; }
+.itinerary-leg-method, .itinerary-transit-korean { white-space: pre-wrap; }
 .itinerary-transport-editor { min-width: 0; margin: 14px 0 0; padding: 4px 10px 10px; border: 1px solid var(--line); border-radius: 8px; }
 .itinerary-transport-editor legend { font-size: 13px; color: var(--muted); }
 .itinerary-transport-editor-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
@@ -319,5 +328,4 @@ button.itinerary-item:hover { background: var(--soft); }
 .itinerary-transport-modes button[aria-pressed="true"] { background: var(--green); color: #fff; border-color: var(--green); }
 .itinerary-transport-editor-header .itinerary-transport-modes { margin: 0; gap: 4px; }
 .itinerary-transport-editor-header button { min-height: 36px; padding: 4px 7px; font-size: 12px; white-space: nowrap; }
-.itinerary-transit-korean { margin-top: 4px; padding: 4px 6px; background: var(--soft); border-radius: 5px; }
-.itinerary-transit-korean [lang="ko"] { font-weight: 600; }
+.itinerary-transit-korean { margin-top: 4px; font-weight: 600; }
