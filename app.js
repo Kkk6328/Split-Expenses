@@ -41,6 +41,14 @@ const field=(name,label,value='',type='text',extra='')=>`<label for="f-${name}">
 function newGroup(){let draft=null;try{draft=JSON.parse(sessionStorage.getItem('split-create-draft'))}catch{}const owner=window.WarmCloud?.user()?.uid;if(cfg.lineApiBase&&!cloud()){window.WarmCloud?.login().catch(e=>toast(e.message));return}modal('建立帳本',field('name','帳本名稱',draft&&draft.owner===owner?draft.name:'','text','required maxlength="60" placeholder="例如：首爾旅行"')+(cfg.lineApiBase?'<p class="hint">建立後自動加入你的 LINE 帳號，其他成員須透過此帳本的邀請連結加入。</p>':field('members','成員暱稱（用逗號分開）',profile?.displayName||'我','text','required maxlength="300" placeholder="喬喬、小安"'))+'<p class="hint">結算幣別：TWD 新台幣。每筆外幣費用都可以輸入自己的匯率。</p>','建立帳本',async f=>{if(cfg.lineApiBase&&!cloud())throw Object.assign(Error('請重新登入 LINE，再建立帳本。'),{code:'line-auth'});const names=cfg.lineApiBase?[(window.WarmCloud.user().displayName||'LINE 成員').slice(0,40)]:[...new Set(f.get('members').split(/[,，、]/).map(s=>s.trim()).filter(Boolean))];if(!names.length||names.length>30||names.some(n=>n.length>40))throw Error('請輸入 1～30 位成員');let g={id:uid(),name:f.get('name').trim(),members:names.map(name=>({id:cfg.lineApiBase?window.WarmCloud.user().uid:uid(),name})),expenses:[],settlements:[],created:today(),cloud:false};if(!g.name)throw Error('請填寫帳本名稱');if(cloud()){const r=await api('create',{group:g});g=r.group}state.groups.push(g);state.current=g.id;persist();render();toast('帳本已建立');try{sessionStorage.removeItem('split-create-draft')}catch{}});$('f-name').oninput=()=>{try{sessionStorage.setItem('split-create-draft',JSON.stringify({owner,name:$('f-name').value}))}catch{}}}
 function allocations(e){const total=e.baseCents,n=e.split.length,q=Math.floor(total/n),r=total%n;return e.split.map((id,i)=>({id,amount:q+(i<r?1:0)}))}
 
+function signedInMember(book){
+ const userId=window.WarmCloud?.user()?.uid;
+ return userId?book.members.find(member=>member.id===userId||member.lineUserId===userId):undefined;
+}
+function personalExpenseTotal(book,memberId){
+ return book.expenses.reduce((sum,expense)=>sum+(allocations(expense).find(share=>share.id===memberId)?.amount??0),0);
+}
+
 function balanceItems(book){
  const items=new Map(book.members.map(member=>[member.id,[]]));
  const titles=new Map(book.expenses.map(expense=>[expense.id,expense.title]));
@@ -348,7 +356,12 @@ function render(){const g=group();
   if(g)try{localStorage.setItem(preferenceKey('current'),g.id)}catch{}
  }
  if(tab!=='itinerary')itineraryView=null;
-document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(picker){picker.innerHTML=activeGroups().map(x=>`<option value="${esc(x.id)}" ${x.id===g?.id?'selected':''}>${esc(x.name)}</option>`).join('');picker.onchange=()=>{state.current=picker.value;persist();render()};$('mobileNew').onclick=newGroup;}if(cfg.lineApiBase&&$('emptyTitle')){$('emptyTitle').textContent=cloud()?'尚未建立帳本':'登入後查看帳本';$('emptyCreate').textContent=cloud()?'建立帳本':'LINE 登入'}$('groupCount').textContent=activeGroups().length;$('groups').innerHTML=activeGroups().map(x=>`<button class="group ${x.id===g?.id?'selected':''}" data-group="${x.id}">▤ ${esc(x.name)}<small>${x.members.length} 位成員 · ${x.expenses.length} 筆費用${x.cloud?' · 共用':''}</small></button>`).join('');$('groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.current=b.dataset.group;persist();render()});$('empty').hidden=!!g;$('book').hidden=!g;if(!g)return;$('deleteBook').hidden=g.cloud&&g.canDelete!==true;$('revokeInvites').hidden=!g.cloud||g.canDelete!==true;$('invite').hidden=g.cloud&&g.canDelete!==true;$('bookTitle').textContent=g.name;$('bookMeta').textContent=`建立日期 ${g.created}`;$('total').textContent='NT$ '+money(g.expenses.reduce((s,e)=>s+e.baseCents,0));$('memberCount').textContent=g.members.length+' 人';$('expenseCount').textContent=g.expenses.length+' 筆';document.querySelectorAll('[data-tab]').forEach(b=>{
+document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(picker){picker.innerHTML=activeGroups().map(x=>`<option value="${esc(x.id)}" ${x.id===g?.id?'selected':''}>${esc(x.name)}</option>`).join('');picker.onchange=()=>{state.current=picker.value;persist();render()};$('mobileNew').onclick=newGroup;}if(cfg.lineApiBase&&$('emptyTitle')){$('emptyTitle').textContent=cloud()?'尚未建立帳本':'登入後查看帳本';$('emptyCreate').textContent=cloud()?'建立帳本':'LINE 登入'}$('groupCount').textContent=activeGroups().length;$('groups').innerHTML=activeGroups().map(x=>`<button class="group ${x.id===g?.id?'selected':''}" data-group="${x.id}">▤ ${esc(x.name)}<small>${x.members.length} 位成員 · ${x.expenses.length} 筆費用${x.cloud?' · 共用':''}</small></button>`).join('');$('groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.current=b.dataset.group;persist();render()});$('empty').hidden=!!g;$('book').hidden=!g;if(!g)return;$('deleteBook').hidden=g.cloud&&g.canDelete!==true;$('revokeInvites').hidden=!g.cloud||g.canDelete!==true;$('invite').hidden=g.cloud&&g.canDelete!==true;$('bookTitle').textContent=g.name;$('bookMeta').textContent=`建立日期 ${g.created}`;
+ const member=signedInMember(g);
+ const personalTotal=$('personalTotal');
+ personalTotal.textContent=member?'NT$ '+briefMoney(personalExpenseTotal(g,member.id)):'—';
+ personalTotal.title=member?'你的分攤金額合計':'登入並配對帳本成員後即可查看';
+ $('memberCount').textContent=g.members.length+' 人';$('expenseCount').textContent=g.expenses.length+' 筆';document.querySelectorAll('[data-tab]').forEach(b=>{
   const active=b.dataset.tab===tab;
   b.classList.toggle('active',active);
   b.classList.toggle('pinned',b.dataset.tab===pinnedTab(g));
@@ -410,8 +423,7 @@ function suggestedTransfers(g,transfers,container){
 }
 
 function mySettlement(book,transfers){
- const userId=window.WarmCloud?.user()?.uid;
- const member=userId&&book.members.find(item=>item.id===userId||item.lineUserId===userId);
+ const member=signedInMember(book);
  if(!member)return '';
  const outgoing=transfers.filter(item=>item.from===member.id);
  const incoming=transfers.filter(item=>item.to===member.id);
