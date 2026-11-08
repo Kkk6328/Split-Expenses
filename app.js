@@ -220,9 +220,10 @@ function renderItinerary(g,c){
  if(itineraryView?.book!==g.id||itineraryView.account!==account){
   const view={book:g.id,account,items:null};
   itineraryView=view;
-  api('listItinerary',{groupId:g.id}).then(({items,notesVersion,timeRangeVersion})=>{
+  api('listItinerary',{groupId:g.id}).then(({items,notesVersion,timeRangeVersion,placeDetailsVersion})=>{
    view.notesReady=notesVersion===2;
    view.timeRangeReady=timeRangeVersion===1;
+   view.placeDetailsReady=placeDetailsVersion===1;
    view.items=view.notesReady?items:items.map(item=>({...item,
     sharedNote:item.privateNote?'':item.note,personalNote:item.privateNote?item.note:''
    }));
@@ -266,6 +267,8 @@ function renderItinerary(g,c){
     return `<${tag} class="itinerary-item${item.endTime?' has-time-range':''}"${editable?` type="button" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}"`:''}>
      <span class="itinerary-clock">${item.time?`<time datetime="${esc(item.date+'T'+item.time)}">${esc(item.time)}</time>`:'未定時間'}${item.endTime?`–<time datetime="${esc(item.date+'T'+item.endTime)}">${esc(item.endTime)}</time>`:''}</span>
      <span><strong>${esc(item.place)}</strong>
+      ${item.address?`<span class="itinerary-place-detail"><small>地址</small>${esc(item.address)}</span>`:''}
+      ${item.openingHours?`<span class="itinerary-place-detail"><small>營業時間</small>${esc(item.openingHours)}</span>`:''}
       ${item.sharedNote?`<span class="itinerary-item-note"><small>所有成員可見</small>${esc(item.sharedNote)}</span>`:''}
       ${item.personalNote?`<span class="itinerary-item-note"><small>🔒 僅自己可見</small>${esc(item.personalNote)}</span>`:''}
      </span>
@@ -289,19 +292,25 @@ function renderItinerary(g,c){
 function editItinerary(g,item){
  if(!g||!itineraryView?.notesReady)return;
  const id=item?.id||uid();
- const {timeRangeReady}=itineraryView;
+ const {timeRangeReady,placeDetailsReady}=itineraryView;
  const start=field('time','開始時間（選填）',item?.time||'','time');
  const timing=timeRangeReady?`<div class="itinerary-time-fields"><div>${start}</div><div>${
   field('endTime','結束時間（選填）',item?.endTime||'','time')
  }</div></div>`:start+'<p class="hint">更新後端後即可設定結束時間。</p>';
+ const placeDetails=placeDetailsReady?
+  field('address','地址（選填）',item?.address||'','text','maxlength="240" placeholder="例如：서울 종로구 율곡로1길 7"')+
+  `<label for="itineraryOpeningHours">營業時間（選填）</label>
+  <textarea class="itinerary-note" id="itineraryOpeningHours" name="openingHours" rows="2" maxlength="400" placeholder="例如：週一至週六 11:30–15:00、17:30–21:00">${esc(item?.openingHours||'')}</textarea>`:
+  '<p class="hint">更新後端後即可填寫地址與營業時間。</p>';
  const form=field('date','日期',item?.date||itineraryDay||today(),'date','required')+
   timing+
-  field('place','地點',item?.place||'','text','required maxlength="120" placeholder="例如：廣藏市場"')+
+  field('place','地點名稱',item?.place||'','text','required maxlength="120" placeholder="例如：廣藏市場"')+
+  placeDetails+
   `<label for="itinerarySharedNote">備註（所有成員可見）</label>
   <textarea class="itinerary-note" id="itinerarySharedNote" name="sharedNote" rows="3" maxlength="1000">${esc(item?.sharedNote||'')}</textarea>
   <label for="itineraryPersonalNote">🔒 備註（僅自己可見）</label>
   <textarea class="itinerary-note" id="itineraryPersonalNote" name="personalNote" rows="3" maxlength="1000">${esc(item?.personalNote||'')}</textarea>
-  <p class="hint">兩格都可選填。日期、時間與地點會顯示給此帳本的成員。</p>`+
+  <p class="hint">地點資訊與共用備註會顯示給此帳本的成員。</p>`+
   (item?'<button type="button" id="deleteItinerary" class="quiet danger">刪除行程</button>':'');
  const reload=(date=itineraryDay)=>{
   if(group()?.id!==g.id)return;
@@ -315,7 +324,9 @@ function editItinerary(g,item){
   const date=f.get('date'),time=f.get('time'),endTime=f.get('endTime');
   if(endTime&&(!time||endTime<=time))throw Error('結束時間須晚於同一天的開始時間');
   await api('saveItinerary',{groupId:g.id,id,revision:item?.revision||'',date,time,place,
-   ...(timeRangeReady?{endTime}:{}),sharedNote:f.get('sharedNote').trim(),personalNote:f.get('personalNote').trim()});
+   ...(timeRangeReady?{endTime}:{}),
+   ...(placeDetailsReady?{address:f.get('address').trim(),openingHours:f.get('openingHours').trim()}:{}),
+   sharedNote:f.get('sharedNote').trim(),personalNote:f.get('personalNote').trim()});
   reload(date);
   toast('行程已儲存');
  });

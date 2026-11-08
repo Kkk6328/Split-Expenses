@@ -19,6 +19,8 @@ async function itinerary(db, bookId, user, body){
  )`).run();
  if(body.action==='listItinerary'){
   const {results}=await db.prepare(`SELECT id, date, substr(time,1,5) AS time, substr(time,7) AS endTime, place,
+   CASE WHEN private_note=2 THEN COALESCE(json_extract(note,'$.address'),'') ELSE '' END AS address,
+   CASE WHEN private_note=2 THEN COALESCE(json_extract(note,'$.openingHours'),'') ELSE '' END AS openingHours,
    CASE private_note WHEN 0 THEN note WHEN 2 THEN json_extract(note,'$.shared') ELSE '' END AS sharedNote,
    CASE WHEN author=?1 THEN
     CASE private_note WHEN 1 THEN note WHEN 2 THEN json_extract(note,'$.personal') ELSE '' END
@@ -26,7 +28,7 @@ async function itinerary(db, bookId, user, body){
    author=?1 AS canEdit, CASE WHEN author=?1 THEN revision ELSE '' END AS revision
    FROM book_itinerary WHERE book_id=?2
    ORDER BY date, book_itinerary.time='', book_itinerary.time, id`).bind(user,bookId).all();
-  return {notesVersion:2,timeRangeVersion:1,items:results.map(item=>({...item,canEdit:!!item.canEdit,
+  return {notesVersion:2,timeRangeVersion:1,placeDetailsVersion:1,items:results.map(item=>({...item,canEdit:!!item.canEdit,
    // Old clients can still read a note, but cannot overwrite two-field records.
    note:item.sharedNote||item.personalNote,privateNote:!item.sharedNote&&!!item.personalNote
   }))};
@@ -44,13 +46,18 @@ async function itinerary(db, bookId, user, body){
  const {date,time,endTime='',privateNote}=body;
  const place=typeof body.place==='string'?body.place.trim():'';
  const dualNotes=Object.hasOwn(body,'sharedNote')||Object.hasOwn(body,'personalNote');
+ const hasPlaceDetails=Object.hasOwn(body,'address')||Object.hasOwn(body,'openingHours');
+ const {address,openingHours}=body;
+ if(hasPlaceDetails&&(!dualNotes||typeof address!=='string'||address.trim().length>240
+  ||typeof openingHours!=='string'||openingHours.trim().length>400))fail('請確認地址與營業時間的格式及長度');
  let note,mode;
  if(dualNotes){
   const {sharedNote,personalNote}=body;
   if(typeof sharedNote!=='string'||typeof personalNote!=='string'
    ||sharedNote.trim().length>1000||personalNote.trim().length>1000)fail('每格備註最多 1000 字');
-  // Mode 2 stores both notes in the existing column, keeping legacy rows readable without a D1 migration.
-  note=JSON.stringify({shared:sharedNote.trim(),personal:personalNote.trim()});
+  // Mode 2 stores the notes and optional place details in the existing column.
+  note=JSON.stringify({shared:sharedNote.trim(),personal:personalNote.trim(),
+   ...(hasPlaceDetails?{address:address.trim(),openingHours:openingHours.trim()}:{})});
   mode=2;
  }else{
   if(typeof body.note!=='string'||body.note.trim().length>1000||typeof privateNote!=='boolean')fail('備註格式錯誤');
@@ -78,8 +85,11 @@ async function itinerary(db, bookId, user, body){
   if(prior)return {ok:true};
  }else{
   const result=await db.prepare(`UPDATE book_itinerary SET date=?,time=?,place=?,note=?,private_note=?,revision=?
-   WHERE book_id=? AND id=? AND author=? AND revision=? AND (private_note<>2 OR ?=2) AND (length(time)<=5 OR ?=1)`)
-   .bind(...values,bookId,id,user,revision,mode,Number(Object.hasOwn(body,'endTime'))).run();
+   WHERE book_id=? AND id=? AND author=? AND revision=? AND (private_note<>2 OR ?=2) AND (length(time)<=5 OR ?=1)
+    AND CASE WHEN private_note=2 AND ?=0 THEN
+      COALESCE(json_extract(note,'$.address'),'')='' AND COALESCE(json_extract(note,'$.openingHours'),'')=''
+     ELSE 1 END`)
+   .bind(...values,bookId,id,user,revision,mode,Number(Object.hasOwn(body,'endTime')),Number(hasPlaceDetails)).run();
   if(result.meta.changes)return {ok:true};
  }
  fail('行程已變更或無權限，請重新載入',409);

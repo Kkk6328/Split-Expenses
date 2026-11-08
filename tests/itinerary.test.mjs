@@ -47,7 +47,7 @@ test('itinerary uses book membership, protects private notes and checks author r
  assert.equal(own.privateNote,true);
  assert.equal(own.canEdit,true);
  const {items}=await api('friend','listItinerary');
- assert.deepEqual(items,[{id:'stop',date:record.date,time:record.time,endTime:'',place:record.place,
+ assert.deepEqual(items,[{id:'stop',date:record.date,time:record.time,endTime:'',place:record.place,address:'',openingHours:'',
   sharedNote:'',personalNote:'',note:'',privateNote:false,canEdit:false,revision:''}]);
  await api('outsider','listItinerary',{},403);
  await api('owner','listItinerary',{groupId:'deleted'},403);
@@ -93,6 +93,23 @@ test('itinerary uses book membership, protects private notes and checks author r
  const {items:[cleared]}=await api('owner','listItinerary');
  assert.equal(cleared.endTime,'');
  assert.equal(cleared.time,range.time);
- await api('owner','deleteItinerary',{id:record.id,revision:cleared.revision});
- assert.deepEqual(await api('friend','listItinerary'),{items:[],notesVersion:2,timeRangeVersion:1});
+ const details={...range,revision:cleared.revision,address:'  서울 종로구 율곡로1길 7  ',
+  openingHours:'11:30–15:00\n17:30–21:00'};
+ await api('owner','saveItinerary',{...details,address:'字'.repeat(241)},400);
+ await api('owner','saveItinerary',{...details,openingHours:42},400);
+ await api('owner','saveItinerary',details);
+ const {items:[publicDetails],placeDetailsVersion}=await api('friend','listItinerary');
+ assert.equal(placeDetailsVersion,1);
+ assert.equal(publicDetails.address,details.address.trim());
+ assert.equal(publicDetails.openingHours,details.openingHours);
+ assert.equal(publicDetails.personalNote,'');
+ const {items:[ownDetails]}=await api('owner','listItinerary');
+ await api('owner','saveItinerary',{...range,revision:ownDetails.revision},409);
+ await api('owner','saveItinerary',{...details,revision:ownDetails.revision,address:'',openingHours:''});
+ const {items:[clearedDetails]}=await api('owner','listItinerary');
+ assert.equal(clearedDetails.address,'');
+ assert.equal(clearedDetails.openingHours,'');
+ assert.equal(clearedDetails.personalNote,details.personalNote);
+ await api('owner','deleteItinerary',{id:record.id,revision:clearedDetails.revision});
+ assert.deepEqual(await api('friend','listItinerary'),{items:[],notesVersion:2,timeRangeVersion:1,placeDetailsVersion:1});
 });

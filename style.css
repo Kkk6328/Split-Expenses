@@ -301,7 +301,9 @@ button.itinerary-item:hover { background: var(--soft); }
 .itinerary-clock { white-space: nowrap; }
 .itinerary-clock, .itinerary-item small, .itinerary-edit { color: var(--muted); font-size: 12px; }
 .itinerary-item small { display: block; }
-.itinerary-item-note { display: block; margin-top: 5px; white-space: pre-wrap; }
+.itinerary-item-note, .itinerary-place-detail { display: block; margin-top: 5px; white-space: pre-wrap; }
+.itinerary-place-detail { color: var(--muted); font-size: 13px; }
+.itinerary-place-detail small { display: inline; font-weight: 600; margin-inline-end: 6px; }
 .itinerary-note { display: block; width: 100%; resize: vertical; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .itinerary-time-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
 .itinerary-time-fields input { min-width: 0; width: 100%; }
