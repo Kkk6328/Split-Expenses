@@ -31,8 +31,8 @@ summary{cursor:pointer;list-style:none}summary::-webkit-details-marker{display:n
 .book-head button{font-size:12px}.book-menu{position:relative}.book-menu>summary{border:1px solid var(--line);border-radius:9px;background:white;min-width:44px;min-height:44px;display:grid;place-items:center;font-weight:700;letter-spacing:2px}
 .menu-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:5;min-width:188px;padding:6px;background:white;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px #2533421f;display:grid;gap:4px}
 .menu-panel button{text-align:left;border:0;width:100%;border-radius:6px;font-size:13px}.menu-panel button:hover{background:var(--soft)}
-.stats{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr) minmax(0,1fr);gap:12px;background:#f4f6f8;padding:20px;border-radius:11px;margin-bottom:20px}
-.stats>div{min-width:0}.stats>div+div{border-left:1px solid var(--line);padding-left:18px}.stats small{display:block;color:var(--muted);font-size:12px}.stats strong{display:block;font-size:23px;font-weight:600;margin-top:8px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stats{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr) minmax(0,1fr);gap:10px;background:#f4f6f8;padding:10px 14px;border-radius:9px;margin-bottom:14px}
+.stats>div{min-width:0}.stats>div+div{border-left:1px solid var(--line);padding-left:12px}.stats small{display:block;color:var(--muted);font-size:12px}.stats strong{display:block;font-size:16px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 nav{display:flex;gap:24px;border-bottom:1px solid var(--line)}nav button{background:transparent;color:var(--muted);padding:12px 0;border-radius:0;min-height:48px;white-space:nowrap}nav .active{color:var(--green);border-bottom:3px solid var(--green)}
 .toolbar{display:flex;gap:12px;justify-content:space-between;align-items:center;padding:18px 0;color:var(--muted);font-size:12px}.toolbar button{font-size:13px}
 .expense,.person,.transfer{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding:16px 0;min-width:0}
@@ -67,14 +67,14 @@ label.check input{width:18px;min-height:18px;height:18px;margin:0;accent-color:v
  #groups{display:flex;gap:8px;overflow:auto;scrollbar-width:thin;padding-bottom:4px}.group{min-width:150px;max-width:240px;width:auto;flex-shrink:0;border:1px solid var(--line);background:white}.group.selected{background:#e3ebf3;border-color:#c9d5e1}
  .note{display:none}.side-tools{margin-top:8px}.side-tools>summary{padding:6px 4px;min-height:36px}.side-tools>div{display:flex;flex-wrap:wrap}.side-tools button{font-size:12px}
  .book{padding:18px 16px;min-height:340px}.book-head{gap:10px;margin-bottom:18px}.book-head h2{font-size:21px}.book-head>div:last-child{gap:6px}.book-head button{font-size:12px;padding:8px 10px}
- .stats{padding:16px 12px;gap:8px;margin-bottom:14px}.stats small{font-size:11px}.stats strong{font-size:19px;margin-top:7px}.stats>div+div{padding-left:10px}
+ .stats{padding:8px 10px;gap:8px}.stats small{font-size:11px}.stats strong{font-size:14px}.stats>div+div{padding-left:8px}
  nav{gap:0;justify-content:space-between}nav button{font-size:14px;padding:11px 4px;min-height:46px}.toolbar{padding:16px 0;font-size:11px}
  .expense{flex-wrap:wrap;gap:10px}.expense .detail{flex-basis:calc(100% - 52px)}.expense .amount{margin-left:50px;flex:1;text-align:left}.expense .amount small{display:inline;margin-left:7px;font-size:10px}.expense button{min-height:40px}
  .person,.transfer{padding:14px 0}.transfer{gap:8px}.transfer button{padding:8px;font-size:12px}.book-footer{margin-top:20px;padding-top:12px}
  .empty{padding:32px 8px}.empty h2{font-size:18px}footer{margin:0 16px;padding:18px 0;font-size:11px}footer span{font-size:10px}
  dialog{padding:20px;max-height:calc(100dvh - 24px);border-radius:14px}.dialog-head{margin-bottom:12px}.dialog-head h2{font-size:21px}input,select{font-size:16px}.row{gap:10px}.hint{font-size:12px}.menu-panel{min-width:188px}
 }
-@media(max-width:380px){.welcome{display:block}.welcome button{margin-top:14px}.stats strong{font-size:17px}.book{padding:16px 12px}.book-head h2{font-size:19px}.book-head button{font-size:11px}}
+@media(max-width:380px){.welcome{display:block}.welcome button{margin-top:14px}.book{padding:16px 12px}.book-head h2{font-size:19px}.book-head button{font-size:11px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 
 
@@ -106,11 +106,6 @@ label.check input{width:18px;min-height:18px;height:18px;margin:0;accent-color:v
  .book-head{align-items:center;margin-bottom:20px}.book-head h2{font-size:26px;margin:0}
  #bookMeta{display:none}.book-head button{font-size:13px}
  #invite{background:#eef2f6;color:var(--green);border-color:#e2e8ef}
- .stats{grid-template-columns:1fr 1fr;background:transparent;padding:0;gap:12px;margin-bottom:24px}
- .stats>div:first-child{grid-column:1/-1;padding-bottom:14px;border-bottom:1px solid var(--line)}
- .stats>div+div{padding:0;border:0;display:flex;align-items:baseline;gap:8px}
- .stats small{font-size:13px}.stats strong{font-size:17px;margin:0}
- .stats>div:first-child strong{font-size:32px;letter-spacing:-.8px;margin-top:4px;line-height:1.4}
  nav{gap:4px;justify-content:initial}nav button{flex:1;font-size:15px;min-height:50px}
  .toolbar{font-size:13px;padding:18px 0 8px}.toolbar button{font-size:14px}
  .person{padding:18px 0;gap:16px;font-size:16px}.person .positive,.person .negative{font-size:15px;text-align:right;font-variant-numeric:tabular-nums}
