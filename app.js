@@ -228,10 +228,11 @@ function renderItinerary(g,c){
  if(itineraryView?.book!==g.id||itineraryView.account!==account){
   const view={book:g.id,account,items:null};
   itineraryView=view;
-  api('listItinerary',{groupId:g.id}).then(({items,notesVersion,timeRangeVersion,placeDetailsVersion})=>{
+  api('listItinerary',{groupId:g.id}).then(({items,notesVersion,timeRangeVersion,placeDetailsVersion,transportVersion})=>{
    view.notesReady=notesVersion===2;
    view.timeRangeReady=timeRangeVersion===1;
    view.placeDetailsReady=placeDetailsVersion===1;
+   view.transportReady=transportVersion===1;
    view.items=view.notesReady?items:items.map(item=>({...item,
     sharedNote:item.privateNote?'':item.note,personalNote:item.privateNote?item.note:''
    }));
@@ -277,6 +278,9 @@ function renderItinerary(g,c){
      <span><strong>${esc(item.place)}</strong>
       ${item.address?`<span class="itinerary-place-detail"><small>地址</small>${esc(item.address)}</span>`:''}
       ${item.openingHours?`<span class="itinerary-place-detail"><small>營業時間</small>${esc(item.openingHours)}</span>`:''}
+      ${(item.transport||[]).map(option=>`<span class="itinerary-transport">${[
+       ['交通方式',option.method],['交通時間',option.duration],['交通金額',option.cost]
+      ].filter(([,value])=>value).map(([label,value])=>`<span><small>${label}</small>${esc(value)}</span>`).join('')}</span>`).join('')}
       ${item.sharedNote?`<span class="itinerary-item-note"><small>所有成員可見</small>${esc(item.sharedNote)}</span>`:''}
       ${item.personalNote?`<span class="itinerary-item-note"><small>🔒 僅自己可見</small>${esc(item.personalNote)}</span>`:''}
      </span>
@@ -300,7 +304,7 @@ function renderItinerary(g,c){
 function editItinerary(g,item){
  if(!g||!itineraryView?.notesReady)return;
  const id=item?.id||uid();
- const {timeRangeReady,placeDetailsReady}=itineraryView;
+ const {timeRangeReady,placeDetailsReady,transportReady}=itineraryView;
  const start=field('time','開始時間（選填）',item?.time||'','time');
  const timing=timeRangeReady?`<div class="itinerary-time-fields"><div>${start}</div><div>${
   field('endTime','結束時間（選填）',item?.endTime||'','time')
@@ -310,10 +314,19 @@ function editItinerary(g,item){
   `<label for="itineraryOpeningHours">營業時間（選填）</label>
   <textarea class="itinerary-note" id="itineraryOpeningHours" name="openingHours" rows="2" maxlength="400" placeholder="例如：週一至週六 11:30–15:00、17:30–21:00">${esc(item?.openingHours||'')}</textarea>`:
   '<p class="hint">更新後端後即可填寫地址與營業時間。</p>';
+ const transportFields=index=>{
+  const option=item?.transport?.[index];
+  return field('transportMethod'+index,'交通方式',option?.method||'','text','maxlength="240" placeholder="例如：地鐵 4 號線 → 明洞站"')+
+   '<div class="itinerary-time-fields"><div>'+field('transportDuration'+index,'交通時間',option?.duration||'','text','maxlength="80" placeholder="例如：19 分鐘"')+
+   '</div><div>'+field('transportCost'+index,'交通金額',option?.cost||'','text','maxlength="100" placeholder="例如：₩1,550／人"')+'</div></div>';
+ };
+ const transportDetails=transportReady?`<fieldset class="itinerary-transport-editor"><legend>前往這一站的交通（選填）</legend>
+  ${transportFields(0)}<details${item?.transport?.[1]?' open':''}><summary>備用交通方案</summary>${transportFields(1)}</details></fieldset>`:
+  '<p class="hint">更新後端後即可填寫交通方式、時間與金額。</p>';
  const form=field('date','日期',item?.date||itineraryDay||today(),'date','required')+
   timing+
   field('place','地點名稱',item?.place||'','text','required maxlength="120" placeholder="例如：廣藏市場"')+
-  placeDetails+
+  placeDetails+transportDetails+
   `<label for="itinerarySharedNote">備註（所有成員可見）</label>
   <textarea class="itinerary-note" id="itinerarySharedNote" name="sharedNote" rows="3" maxlength="1000">${esc(item?.sharedNote||'')}</textarea>
   <label for="itineraryPersonalNote">🔒 備註（僅自己可見）</label>
@@ -331,7 +344,12 @@ function editItinerary(g,item){
   if(!place)throw Error('請填寫地點');
   const date=f.get('date'),time=f.get('time'),endTime=f.get('endTime');
   if(endTime&&(!time||endTime<=time))throw Error('結束時間須晚於同一天的開始時間');
+  const transport=transportReady?[0,1].map(index=>({
+   method:f.get('transportMethod'+index).trim(),duration:f.get('transportDuration'+index).trim(),
+   cost:f.get('transportCost'+index).trim()
+  })):undefined;
   await api('saveItinerary',{groupId:g.id,id,revision:item?.revision||'',date,time,place,
+   ...(transportReady?{transport}:{}),
    ...(timeRangeReady?{endTime}:{}),
    ...(placeDetailsReady?{address:f.get('address').trim(),openingHours:f.get('openingHours').trim()}:{}),
    sharedNote:f.get('sharedNote').trim(),personalNote:f.get('personalNote').trim()});

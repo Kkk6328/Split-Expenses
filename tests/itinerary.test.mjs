@@ -47,7 +47,7 @@ test('itinerary uses book membership, protects private notes and checks author r
  assert.equal(own.privateNote,true);
  assert.equal(own.canEdit,true);
  const {items}=await api('friend','listItinerary');
- assert.deepEqual(items,[{id:'stop',date:record.date,time:record.time,endTime:'',place:record.place,address:'',openingHours:'',
+ assert.deepEqual(items,[{id:'stop',date:record.date,time:record.time,endTime:'',place:record.place,address:'',openingHours:'',transport:[],
   sharedNote:'',personalNote:'',note:'',privateNote:false,canEdit:false,revision:''}]);
  await api('outsider','listItinerary',{},403);
  await api('owner','listItinerary',{groupId:'deleted'},403);
@@ -110,6 +110,22 @@ test('itinerary uses book membership, protects private notes and checks author r
  assert.equal(clearedDetails.address,'');
  assert.equal(clearedDetails.openingHours,'');
  assert.equal(clearedDetails.personalNote,details.personalNote);
- await api('owner','deleteItinerary',{id:record.id,revision:clearedDetails.revision});
- assert.deepEqual(await api('friend','listItinerary'),{items:[],notesVersion:2,timeRangeVersion:1,placeDetailsVersion:1});
+ const transport=[{method:'地鐵 4 號線 → 明洞站',duration:'19 分鐘',cost:'₩1,550／人'},
+  {method:'計程車',duration:'11 分鐘',cost:'₩5,900／車'}];
+ const withTransport={...details,revision:clearedDetails.revision,transport};
+ await api('owner','saveItinerary',{...withTransport,transport:[{method:'步行',duration:'10 分鐘',cost:0}]},400);
+ await api('owner','saveItinerary',withTransport);
+ const {items:[transportItem],transportVersion}=await api('friend','listItinerary');
+ assert.equal(transportVersion,1);
+ assert.deepEqual(transportItem.transport,transport);
+ assert.equal(transportItem.personalNote,'');
+ const {items:[ownedTransport]}=await api('owner','listItinerary');
+ await api('owner','saveItinerary',{...details,revision:ownedTransport.revision},409);
+ await api('owner','saveItinerary',{...withTransport,revision:ownedTransport.revision,transport:[]});
+ const {items:[clearedTransport]}=await api('owner','listItinerary');
+ assert.deepEqual(clearedTransport.transport,[]);
+ assert.equal(clearedTransport.sharedNote,details.sharedNote);
+ assert.equal(clearedTransport.personalNote,details.personalNote);
+ await api('owner','deleteItinerary',{id:record.id,revision:clearedTransport.revision});
+ assert.deepEqual(await api('friend','listItinerary'),{items:[],notesVersion:2,timeRangeVersion:1,placeDetailsVersion:1,transportVersion:1});
 });

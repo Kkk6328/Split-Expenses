@@ -302,3 +302,10 @@ button.itinerary-item:hover { background: var(--soft); }
 .itinerary-note { display: block; width: 100%; resize: vertical; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .itinerary-time-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
 .itinerary-time-fields input { min-width: 0; width: 100%; }
+
+.itinerary-transport { display: block; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; font-size: 13px; }
+.itinerary-transport > span { display: block; }
+.itinerary-transport small { display: inline; font-weight: 600; margin-inline-end: 6px; }
+.itinerary-transport-editor { min-width: 0; margin: 14px 0 0; padding: 4px 10px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.itinerary-transport-editor legend, .itinerary-transport-editor summary { font-size: 13px; color: var(--muted); }
+.itinerary-transport-editor summary { margin-top: 10px; cursor: pointer; }
