@@ -18,15 +18,15 @@ async function itinerary(db, bookId, user, body){
   PRIMARY KEY (book_id, id)
  )`).run();
  if(body.action==='listItinerary'){
-  const {results}=await db.prepare(`SELECT id, date, time, place,
+  const {results}=await db.prepare(`SELECT id, date, substr(time,1,5) AS time, substr(time,7) AS endTime, place,
    CASE private_note WHEN 0 THEN note WHEN 2 THEN json_extract(note,'$.shared') ELSE '' END AS sharedNote,
    CASE WHEN author=?1 THEN
     CASE private_note WHEN 1 THEN note WHEN 2 THEN json_extract(note,'$.personal') ELSE '' END
     ELSE '' END AS personalNote,
    author=?1 AS canEdit, CASE WHEN author=?1 THEN revision ELSE '' END AS revision
    FROM book_itinerary WHERE book_id=?2
-   ORDER BY date, time='', time, id`).bind(user,bookId).all();
-  return {notesVersion:2,items:results.map(item=>({...item,canEdit:!!item.canEdit,
+   ORDER BY date, book_itinerary.time='', book_itinerary.time, id`).bind(user,bookId).all();
+  return {notesVersion:2,timeRangeVersion:1,items:results.map(item=>({...item,canEdit:!!item.canEdit,
    // Old clients can still read a note, but cannot overwrite two-field records.
    note:item.sharedNote||item.personalNote,privateNote:!item.sharedNote&&!!item.personalNote
   }))};
@@ -41,7 +41,7 @@ async function itinerary(db, bookId, user, body){
   return {ok:true};
  }
 
- const {date,time,privateNote}=body;
+ const {date,time,endTime='',privateNote}=body;
  const place=typeof body.place==='string'?body.place.trim():'';
  const dualNotes=Object.hasOwn(body,'sharedNote')||Object.hasOwn(body,'personalNote');
  let note,mode;
@@ -57,12 +57,17 @@ async function itinerary(db, bookId, user, body){
   note=body.note.trim();
   mode=Number(privateNote);
  }
+ const clock=/^([01]\d|2[0-3]):[0-5]\d$/;
+ if(typeof time!=='string'||(time!==''&&!clock.test(time)))fail('請確認開始時間');
+ if(typeof endTime!=='string'||(endTime!==''&&(!clock.test(endTime)||!time||endTime<=time)))
+  fail('結束時間須晚於同一天的開始時間');
+ // Store a range in the existing time column; single times retain their original format.
+ const storedTime=endTime?time+'/'+endTime:time;
  const parsed=typeof date==='string'?new Date(date+'T00:00:00Z'):null;
  if(!parsed||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(+parsed)||parsed.toISOString().slice(0,10)!==date
-  ||typeof time!=='string'||(time!==''&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(time))
   ||!place||place.length>120)fail('請確認行程的日期、時間、地點與備註');
  const nextRevision=crypto.randomUUID();
- const values=[date,time,place,note,mode,nextRevision];
+ const values=[date,storedTime,place,note,mode,nextRevision];
  if(!revision){
   const result=await db.prepare(`INSERT OR IGNORE INTO book_itinerary
    (book_id,id,author,date,time,place,note,private_note,revision) VALUES(?,?,?,?,?,?,?,?,?)`)
@@ -73,8 +78,8 @@ async function itinerary(db, bookId, user, body){
   if(prior)return {ok:true};
  }else{
   const result=await db.prepare(`UPDATE book_itinerary SET date=?,time=?,place=?,note=?,private_note=?,revision=?
-   WHERE book_id=? AND id=? AND author=? AND revision=? AND (private_note<>2 OR ?=2)`)
-   .bind(...values,bookId,id,user,revision,mode).run();
+   WHERE book_id=? AND id=? AND author=? AND revision=? AND (private_note<>2 OR ?=2) AND (length(time)<=5 OR ?=1)`)
+   .bind(...values,bookId,id,user,revision,mode,Number(Object.hasOwn(body,'endTime'))).run();
   if(result.meta.changes)return {ok:true};
  }
  fail('行程已變更或無權限，請重新載入',409);
