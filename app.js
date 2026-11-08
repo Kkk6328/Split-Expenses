@@ -240,10 +240,11 @@ function koreanSubwayRoute(method){
  });
  return stops.length>1&&stops.every(Boolean)?stops.join(' → '):'';
 }
+const transportModes=[['transit','地鐵／步行'],['car','搭車']];
+const isCarTransport=option=>/計程車|計程|開車|自駕|機場接送|包車|搭車|taxi|uber/i.test(option?.method||'');
 function itineraryTransportMarkup(options){
  if(!options?.length)return '';
- const isCar=option=>/計程車|開車|自駕|機場接送|包車/.test(option.method);
- const matches=options.filter(option=>isCar(option)===(itineraryTransportMode==='car'));
+ const matches=options.filter(option=>isCarTransport(option)===(itineraryTransportMode==='car'));
  return (matches.length?matches:options).map(option=>{
   const korean=koreanSubwayRoute(option.method);
   const details=[['交通方式',option.method],['交通時間',option.duration],['交通金額',option.cost]]
@@ -297,10 +298,10 @@ function renderItinerary(g,c){
  const options=['',...dates].map(date=>`<button type="button" class="quiet" data-itinerary-day="${esc(date)}"
   aria-pressed="${date===itineraryDay}">${date?`第 ${dayNumber(date)} 天 <small>${esc(shortDate(date))}</small>`:'總覽'}</button>`);
  const visibleDays=itineraryDay?[[itineraryDay,days.get(itineraryDay)]]:[...days];
- const transportModes=items.some(item=>item.transport?.length)?`<div class="itinerary-transport-modes" role="group" aria-label="交通方式">
-  ${[['transit','地鐵／步行'],['car','搭車']].map(([mode,label])=>`<button type="button" class="quiet" data-transport-mode="${mode}" aria-pressed="${mode===itineraryTransportMode}">${label}</button>`).join('')}
+ const transportPicker=items.some(item=>item.transport?.length)?`<div class="itinerary-transport-modes" role="group" aria-label="交通方式">
+  ${transportModes.map(([mode,label])=>`<button type="button" class="quiet" data-transport-mode="${mode}" aria-pressed="${mode===itineraryTransportMode}">${label}</button>`).join('')}
  </div>`:'';
- c.innerHTML=notice+`<div class="itinerary-days" role="group" aria-label="行程日期">${options.join('')}</div>`+transportModes+
+ c.innerHTML=notice+`<div class="itinerary-days" role="group" aria-label="行程日期">${options.join('')}</div>`+transportPicker+
   visibleDays.map(([date,entries])=>`<section class="itinerary-day"><h3>第 ${dayNumber(date)} 天 <span>${esc(date)}</span></h3>
    ${entries.map(item=>{
     const editable=notesReady&&item.canEdit;
@@ -354,14 +355,24 @@ function editItinerary(g,item){
   `<label for="itineraryOpeningHours">營業時間（選填）</label>
   <textarea class="itinerary-note" id="itineraryOpeningHours" name="openingHours" rows="2" maxlength="400" placeholder="例如：週一至週六 11:30–15:00、17:30–21:00">${esc(item?.openingHours||'')}</textarea>`:
   '<p class="hint">更新後端後即可填寫地址與營業時間。</p>';
- const transportFields=index=>{
-  const option=item?.transport?.[index];
-  return field('transportMethod'+index,'交通方式',option?.method||'','text','maxlength="240" placeholder="例如：地鐵 4 號線 → 明洞站"')+
-   '<div class="itinerary-time-fields"><div>'+field('transportDuration'+index,'交通時間',option?.duration||'','text','maxlength="80" placeholder="例如：19 分鐘"')+
-   '</div><div>'+field('transportCost'+index,'交通金額',option?.cost||'','text','maxlength="100" placeholder="例如：₩1,550／人"')+'</div></div>';
+ const [first,second]=item?.transport||[];
+ const [transit,car]=isCarTransport(first)&&!isCarTransport(second)?[second,first]:[first,second];
+ const activeMode=transit&&car?itineraryTransportMode:car?'car':'transit';
+ const transportFields=([mode],index)=>{
+  const option=mode==='car'?car:transit;
+  const placeholder=mode==='car'?'例如：計程車':'例如：地鐵 4 號線 → 明洞站';
+  return `<div id="itinerary-transport-${mode}"${mode===activeMode?'':' hidden'}>
+   <input id="f-transportMethod${index}" name="transportMethod${index}" value="${esc(option?.method||'')}" maxlength="240" placeholder="${placeholder}">
+   <div class="itinerary-time-fields"><div>${field('transportDuration'+index,'交通時間',option?.duration||'','text','maxlength="80" placeholder="例如：19 分鐘"')}</div>
+   <div>${field('transportCost'+index,'交通金額',option?.cost||'','text','maxlength="100" placeholder="例如：₩1,550／人"')}</div></div></div>`;
  };
  const transportDetails=transportReady?`<fieldset class="itinerary-transport-editor"><legend>前往這一站的交通（選填）</legend>
-  ${transportFields(0)}<details${item?.transport?.[1]?' open':''}><summary>備用交通方案</summary>${transportFields(1)}</details></fieldset>`:
+  <div class="itinerary-transport-editor-header">
+   ${transportModes.map(([mode],index)=>`<label for="f-transportMethod${index}"${mode===activeMode?'':' hidden'}>交通方式</label>`).join('')}
+   <div class="itinerary-transport-modes" role="group" aria-label="切換交通方案">
+    ${transportModes.map(([mode,label])=>`<button type="button" class="quiet" aria-controls="itinerary-transport-${mode}" aria-pressed="${mode===activeMode}">${label}</button>`).join('')}
+   </div>
+  </div>${transportModes.map(transportFields).join('')}</fieldset>`:
   '<p class="hint">更新後端後即可填寫交通方式、時間與金額。</p>';
  const form=field('date','日期',item?.date||itineraryDay||today(),'date','required')+
   timing+
@@ -388,6 +399,12 @@ function editItinerary(g,item){
    method:f.get('transportMethod'+index).trim(),duration:f.get('transportDuration'+index).trim(),
    cost:f.get('transportCost'+index).trim()
   })):undefined;
+  // The server omits empty options, so a lone car option needs an identifiable method.
+  if(transport&&!Object.values(transport[0]).some(Boolean)&&Object.values(transport[1]).some(Boolean)&&!isCarTransport(transport[1])){
+   const option=transport[1];
+   option.method=option.method?`搭車：${option.method}`:'搭車';
+   if(option.method.length>240)throw Error('搭車的交通方式請縮短至 237 字以內');
+  }
   await api('saveItinerary',{groupId:g.id,id,revision:item?.revision||'',date,time,place,
    ...(transportReady?{transport}:{}),
    ...(timeRangeReady?{endTime}:{}),
@@ -396,6 +413,19 @@ function editItinerary(g,item){
   reload(date);
   toast('行程已儲存');
  });
+ if(transportReady){
+  const editor=$('fields').querySelector('.itinerary-transport-editor');
+  const buttons=[...editor.querySelectorAll('button[aria-controls]')];
+  const labels=[...editor.querySelector('.itinerary-transport-editor-header').querySelectorAll('label')];
+  buttons.forEach(button=>{
+   button.onclick=()=>buttons.forEach((option,index)=>{
+    const selected=option===button;
+    option.setAttribute('aria-pressed',String(selected));
+    labels[index].hidden=!selected;
+    $(option.getAttribute('aria-controls')).hidden=!selected;
+   });
+  });
+ }
  if(item)$('deleteItinerary').onclick=()=>{
   modal('刪除行程',`<p>確定刪除「${esc(item.place)}」？</p>`,'確認刪除',async()=>{
    await api('deleteItinerary',{groupId:g.id,id,revision:item.revision});

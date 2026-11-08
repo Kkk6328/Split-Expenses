@@ -307,11 +307,14 @@ button.itinerary-item:hover { background: var(--soft); }
 .itinerary-transport > span { display: block; }
 .itinerary-transport small { display: inline; font-weight: 600; margin-inline-end: 6px; }
 .itinerary-transport-editor { min-width: 0; margin: 14px 0 0; padding: 4px 10px 10px; border: 1px solid var(--line); border-radius: 8px; }
-.itinerary-transport-editor legend, .itinerary-transport-editor summary { font-size: 13px; color: var(--muted); }
-.itinerary-transport-editor summary { margin-top: 10px; cursor: pointer; }
+.itinerary-transport-editor legend { font-size: 13px; color: var(--muted); }
+.itinerary-transport-editor-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.itinerary-transport-editor-header label { margin: 0; }
 
 .itinerary-transport-modes { display: flex; gap: 6px; margin: 0 0 14px; }
 .itinerary-transport-modes button { padding: 4px 12px; min-height: 36px; font-size: 13px; }
 .itinerary-transport-modes button[aria-pressed="true"] { background: var(--green); color: #fff; border-color: var(--green); }
+.itinerary-transport-editor-header .itinerary-transport-modes { margin: 0; gap: 4px; }
+.itinerary-transport-editor-header button { min-height: 36px; padding: 4px 7px; font-size: 12px; white-space: nowrap; }
 .itinerary-transit-korean { margin-top: 4px; padding: 4px 6px; background: var(--soft); border-radius: 5px; }
 .itinerary-transit-korean [lang="ko"] { font-weight: 600; }
