@@ -199,6 +199,7 @@ function showBalanceDetails(memberId){
 
 function plan(g){const b=balances(g),deb=g.members.filter(m=>b[m.id]<0).map(m=>({...m,left:-b[m.id]})),cre=g.members.filter(m=>b[m.id]>0).map(m=>({...m,left:b[m.id]}));let out=[],i=0,j=0;while(i<deb.length&&j<cre.length){const amount=Math.min(deb[i].left,cre[j].left);out.push({from:deb[i].id,to:cre[j].id,amount});deb[i].left-=amount;cre[j].left-=amount;if(!deb[i].left)i++;if(!cre[j].left)j++}return out}
 const name=(g,id)=>g.members.find(m=>m.id===id)?.name||'未知成員';
+let itineraryTransportMode='transit';
 const bookTabs={itinerary:'行程',balances:'分帳結算',expenses:'花費明細',members:'成員'};
 function preferenceKey(kind,id=''){
  const account=window.WarmCloud?.user()?.uid||'local';
@@ -222,6 +223,34 @@ function togglePinnedTab(){
  }catch{toast('無法儲存預設頁面');return}
  render();
  toast(pinned?'已取消置頂':`下次開啟此帳本會先顯示「${bookTabs[tab]}」`);
+}
+const koreanSubwayStations={
+ '東大門歷史文化公園站':'동대문역사문화공원역','明洞站':'명동역','乙支路入口站':'을지로입구역',
+ '新堂站':'신당역','新設洞站':'신설동역','東大門站':'동대문역','鐘路三街站':'종로3가역',
+ '安國站':'안국역','鐘路五街站':'종로5가역','東大入口站':'동대입구역','市廳站':'시청역',
+ '首爾站':'서울역','龍山站':'용산역','新龍山站':'신용산역','蠶室站':'잠실역','聖水站':'성수역'
+};
+function koreanSubwayRoute(method){
+ if(!/\d+\s*號線/.test(method))return '';
+ const stops=method.replace(/^從.*?出發[：:]\s*/,'').replace(/（[^）]*）/g,'').split('→').map(part=>{
+  const stop=part.trim().match(/^(.+?站)\s*(?:(轉\s*)?(\d+)\s*號線)?$/);
+  if(!stop||!Object.hasOwn(koreanSubwayStations,stop[1]))return '';
+  const [,station,transfer,line]=stop;
+  return koreanSubwayStations[station]+(line?` ${line}호선${transfer?' 환승':''}`:'');
+ });
+ return stops.length>1&&stops.every(Boolean)?stops.join(' → '):'';
+}
+function itineraryTransportMarkup(options){
+ if(!options?.length)return '';
+ const isCar=option=>/計程車|開車|自駕|機場接送|包車/.test(option.method);
+ const matches=options.filter(option=>isCar(option)===(itineraryTransportMode==='car'));
+ return (matches.length?matches:options).map(option=>{
+  const korean=koreanSubwayRoute(option.method);
+  const details=[['交通方式',option.method],['交通時間',option.duration],['交通金額',option.cost]]
+   .filter(([,value])=>value).map(([label,value])=>`<span><small>${label}</small>${esc(value)}</span>`).join('');
+  return `<span class="itinerary-transport">${details}${korean?
+   `<span class="itinerary-transit-korean"><small>韓文對照</small><span lang="ko">${esc(korean)}</span></span>`:''}</span>`;
+ }).join('');
 }
 function renderItinerary(g,c){
  const account=window.WarmCloud?.user()?.uid;
@@ -268,7 +297,10 @@ function renderItinerary(g,c){
  const options=['',...dates].map(date=>`<button type="button" class="quiet" data-itinerary-day="${esc(date)}"
   aria-pressed="${date===itineraryDay}">${date?`第 ${dayNumber(date)} 天 <small>${esc(shortDate(date))}</small>`:'總覽'}</button>`);
  const visibleDays=itineraryDay?[[itineraryDay,days.get(itineraryDay)]]:[...days];
- c.innerHTML=notice+`<div class="itinerary-days" role="group" aria-label="行程日期">${options.join('')}</div>`+
+ const transportModes=items.some(item=>item.transport?.length)?`<div class="itinerary-transport-modes" role="group" aria-label="交通方式">
+  ${[['transit','地鐵／步行'],['car','搭車']].map(([mode,label])=>`<button type="button" class="quiet" data-transport-mode="${mode}" aria-pressed="${mode===itineraryTransportMode}">${label}</button>`).join('')}
+ </div>`:'';
+ c.innerHTML=notice+`<div class="itinerary-days" role="group" aria-label="行程日期">${options.join('')}</div>`+transportModes+
   visibleDays.map(([date,entries])=>`<section class="itinerary-day"><h3>第 ${dayNumber(date)} 天 <span>${esc(date)}</span></h3>
    ${entries.map(item=>{
     const editable=notesReady&&item.canEdit;
@@ -278,9 +310,7 @@ function renderItinerary(g,c){
      <span><strong>${esc(item.place)}</strong>
       ${item.address?`<span class="itinerary-place-detail"><small>地址</small>${esc(item.address)}</span>`:''}
       ${item.openingHours?`<span class="itinerary-place-detail"><small>營業時間</small>${esc(item.openingHours)}</span>`:''}
-      ${(item.transport||[]).map(option=>`<span class="itinerary-transport">${[
-       ['交通方式',option.method],['交通時間',option.duration],['交通金額',option.cost]
-      ].filter(([,value])=>value).map(([label,value])=>`<span><small>${label}</small>${esc(value)}</span>`).join('')}</span>`).join('')}
+      ${itineraryTransportMarkup(item.transport)}
       ${item.sharedNote?`<span class="itinerary-item-note"><small>所有成員可見</small>${esc(item.sharedNote)}</span>`:''}
       ${item.personalNote?`<span class="itinerary-item-note"><small>🔒 僅自己可見</small>${esc(item.personalNote)}</span>`:''}
      </span>
@@ -295,6 +325,16 @@ function renderItinerary(g,c){
    const selected=c.querySelector('[data-itinerary-day][aria-pressed="true"]');
    selected.parentElement.scrollLeft=offset;
    selected.focus({preventScroll:true});
+  };
+ });
+ c.querySelectorAll('[data-transport-mode]').forEach(button=>{
+  button.onclick=()=>{
+   if(itineraryTransportMode===button.dataset.transportMode)return;
+   itineraryTransportMode=button.dataset.transportMode;
+   const dayOffset=c.querySelector('.itinerary-days').scrollLeft;
+   renderItinerary(g,c);
+   c.querySelector('.itinerary-days').scrollLeft=dayOffset;
+   c.querySelector('[data-transport-mode][aria-pressed="true"]').focus({preventScroll:true});
   };
  });
  c.querySelectorAll('[data-itinerary]').forEach(button=>{
