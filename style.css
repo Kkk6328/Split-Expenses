@@ -273,19 +273,31 @@ dialog:modal{
 .tab-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 #pinTab { min-width: 44px; min-height: 44px; padding: 4px; border: 1px solid transparent; }
 #pinTab[aria-pressed="true"] { border-color: var(--green); background: #e8eff3; }
+.itinerary-days { display: flex; gap: 8px; overflow-x: auto; padding: 3px 3px 10px; margin-bottom: 12px; }
+.itinerary-days button { flex: 0 0 auto; padding: 6px 12px; }
+.itinerary-days button[aria-pressed="true"] { background: var(--green); color: #fff; border-color: var(--green); }
+.itinerary-days small { display: block; font-weight: 400; }
 .itinerary-day { margin-bottom: 18px; }
-.itinerary-day h3 { font-size: 14px; margin: 0 0 6px; color: var(--muted); }
+.itinerary-day h3 { font-size: 14px; margin: 0 0 8px; color: var(--ink); }
+.itinerary-day h3 span { color: var(--muted); font-weight: 400; margin-inline-start: 6px; }
 .itinerary-item {
  display: grid;
  grid-template-columns: 4.5em minmax(0,1fr) auto;
  align-items: start;
  gap: 8px;
- padding: 12px 0;
- border-top: 1px solid var(--line);
+ width: 100%;
+ margin-bottom: 8px;
+ padding: 12px;
+ border: 1px solid var(--line);
+ border-radius: 9px;
+ background: #fff;
+ color: var(--ink);
+ text-align: start;
+ font-weight: 400;
  overflow-wrap: anywhere;
 }
-.itinerary-item time, .itinerary-item small { color: var(--muted); font-size: 12px; }
+button.itinerary-item:hover { background: var(--soft); }
+.itinerary-item time, .itinerary-item small, .itinerary-edit { color: var(--muted); font-size: 12px; }
 .itinerary-item small { display: block; }
-.itinerary-item p { margin: 5px 0 0; white-space: pre-wrap; }
-.itinerary-item button { min-height: 44px; }
+.itinerary-item-note { display: block; margin-top: 5px; white-space: pre-wrap; }
 .itinerary-note { display: block; width: 100%; resize: vertical; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }

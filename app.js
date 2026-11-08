@@ -1,7 +1,7 @@
 'use strict';
 function expenseDays(expenses){const days=new Map();for(const e of [...expenses].sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created)){if(!days.has(e.date))days.set(e.date,{date:e.date,expenses:[],total:0});const day=days.get(e.date);day.expenses.push(e);day.total+=e.baseCents}return [...days.values()]}
 const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),uid=()=>crypto.randomUUID(),money=n=>new Intl.NumberFormat('zh-TW',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n/100);
-const storageKey=window.APP_CONFIG?.lineApiBase?'split-line-v1':'warm-split-v1';let state;try{state=JSON.parse(localStorage.getItem(storageKey));if(!state&&window.APP_CONFIG?.lineApiBase){const old=JSON.parse(localStorage.getItem('warm-split-v1')||'null');if(old)state={groups:old.groups.filter(g=>!g.cloud),current:null}}}catch{}state=state||{groups:[],current:null};let tab='expenses',profile=null,ready=false,openedBook='',itineraryView=null;
+const storageKey=window.APP_CONFIG?.lineApiBase?'split-line-v1':'warm-split-v1';let state;try{state=JSON.parse(localStorage.getItem(storageKey));if(!state&&window.APP_CONFIG?.lineApiBase){const old=JSON.parse(localStorage.getItem('warm-split-v1')||'null');if(old)state={groups:old.groups.filter(g=>!g.cloud),current:null}}}catch{}state=state||{groups:[],current:null};let tab='expenses',profile=null,ready=false,openedBook='',itineraryView=null,itineraryDay='';
 const cfg=window.APP_CONFIG||{},activeGroups=()=>state.groups.filter(g=>!g.deletedAt&&(!cfg.lineApiBase||(cloud()&&g.cloud))),group=()=>activeGroups().find(g=>g.id===state.current),cloud=()=>!!window.WarmCloud?.user(),today=()=>new Date().toLocaleDateString('en-CA');
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').style.display='none',4000)}
 function persist(){localStorage.setItem(storageKey,JSON.stringify(state))}
@@ -250,15 +250,37 @@ function renderItinerary(g,c){
   if(!days.has(item.date))days.set(item.date,[]);
   days.get(item.date).push(item);
  }
- c.innerHTML=notice+[...days].map(([date,entries])=>`<section class="itinerary-day"><h3>${esc(date)}</h3>${entries.map(item=>`
-  <article class="itinerary-item">
-   <time datetime="${esc(item.date+(item.time?'T'+item.time:''))}">${item.time?esc(item.time):'未定時間'}</time>
-   <div><strong>${esc(item.place)}</strong>
-    ${item.sharedNote?`<p><small>所有成員可見</small>${esc(item.sharedNote)}</p>`:''}
-    ${item.personalNote?`<p><small>🔒 僅自己可見</small>${esc(item.personalNote)}</p>`:''}
-   </div>
-   ${notesReady&&item.canEdit?`<button type="button" class="quiet" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}">編輯</button>`:''}
-  </article>`).join('')}</section>`).join('');
+ const dates=[...days.keys()];
+ if(itineraryDay&&!days.has(itineraryDay))itineraryDay='';
+ const dayNumber=date=>1+Math.round((Date.parse(date)-Date.parse(dates[0]))/86400000);
+ const shortDate=date=>date.slice(5).replace('-','/');
+ const options=['',...dates].map(date=>`<button type="button" class="quiet" data-itinerary-day="${esc(date)}"
+  aria-pressed="${date===itineraryDay}">${date?`第 ${dayNumber(date)} 天 <small>${esc(shortDate(date))}</small>`:'總覽'}</button>`);
+ const visibleDays=itineraryDay?[[itineraryDay,days.get(itineraryDay)]]:[...days];
+ c.innerHTML=notice+`<div class="itinerary-days" role="group" aria-label="行程日期">${options.join('')}</div>`+
+  visibleDays.map(([date,entries])=>`<section class="itinerary-day"><h3>第 ${dayNumber(date)} 天 <span>${esc(date)}</span></h3>
+   ${entries.map(item=>{
+    const editable=notesReady&&item.canEdit;
+    const tag=editable?'button':'article';
+    return `<${tag} class="itinerary-item"${editable?` type="button" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}"`:''}>
+     <time datetime="${esc(item.date+(item.time?'T'+item.time:''))}">${item.time?esc(item.time):'未定時間'}</time>
+     <span><strong>${esc(item.place)}</strong>
+      ${item.sharedNote?`<span class="itinerary-item-note"><small>所有成員可見</small>${esc(item.sharedNote)}</span>`:''}
+      ${item.personalNote?`<span class="itinerary-item-note"><small>🔒 僅自己可見</small>${esc(item.personalNote)}</span>`:''}
+     </span>
+     ${editable?'<span class="itinerary-edit" aria-hidden="true">編輯 ›</span>':''}
+    </${tag}>`;
+   }).join('')}</section>`).join('');
+ c.querySelectorAll('[data-itinerary-day]').forEach(button=>{
+  button.onclick=()=>{
+   itineraryDay=button.dataset.itineraryDay;
+   const offset=button.parentElement.scrollLeft;
+   renderItinerary(g,c);
+   const selected=c.querySelector('[data-itinerary-day][aria-pressed="true"]');
+   selected.parentElement.scrollLeft=offset;
+   selected.focus({preventScroll:true});
+  };
+ });
  c.querySelectorAll('[data-itinerary]').forEach(button=>{
   button.onclick=()=>editItinerary(g,items.find(item=>item.id===button.dataset.itinerary));
  });
@@ -266,7 +288,7 @@ function renderItinerary(g,c){
 function editItinerary(g,item){
  if(!g||!itineraryView?.notesReady)return;
  const id=item?.id||uid();
- const form=field('date','日期',item?.date||today(),'date','required')+
+ const form=field('date','日期',item?.date||itineraryDay||today(),'date','required')+
   field('time','時間（選填）',item?.time||'','time')+
   field('place','地點',item?.place||'','text','required maxlength="120" placeholder="例如：廣藏市場"')+
   `<label for="itinerarySharedNote">備註（所有成員可見）</label>
@@ -275,17 +297,19 @@ function editItinerary(g,item){
   <textarea class="itinerary-note" id="itineraryPersonalNote" name="personalNote" rows="3" maxlength="1000">${esc(item?.personalNote||'')}</textarea>
   <p class="hint">兩格都可選填。日期、時間與地點會顯示給此帳本的成員。</p>`+
   (item?'<button type="button" id="deleteItinerary" class="quiet danger">刪除行程</button>':'');
- const reload=()=>{
+ const reload=(date=itineraryDay)=>{
   if(group()?.id!==g.id)return;
+  itineraryDay=date;
   itineraryView=null;
   render();
  };
  modal(item?'編輯行程':'新增行程',form,'儲存行程',async f=>{
   const place=f.get('place').trim();
   if(!place)throw Error('請填寫地點');
-  await api('saveItinerary',{groupId:g.id,id,revision:item?.revision||'',date:f.get('date'),
+  const date=f.get('date');
+  await api('saveItinerary',{groupId:g.id,id,revision:item?.revision||'',date,
    time:f.get('time'),place,sharedNote:f.get('sharedNote').trim(),personalNote:f.get('personalNote').trim()});
-  reload();
+  reload(date);
   toast('行程已儲存');
  });
  if(item)$('deleteItinerary').onclick=()=>{
@@ -302,6 +326,7 @@ function render(){const g=group();
   openedBook=bookKey;
   tab=g?pinnedTab(g)||'expenses':'expenses';
   itineraryView=null;
+  itineraryDay='';
   if(g)try{localStorage.setItem(preferenceKey('current'),g.id)}catch{}
  }
  if(tab!=='itinerary')itineraryView=null;
