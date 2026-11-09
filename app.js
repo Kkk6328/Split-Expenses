@@ -737,14 +737,22 @@ function noteImages(note){
  if(!Array.isArray(note?.images))return [];
  return note.images.filter(src=>typeof src==='string'&&/^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(src));
 }
+let bookNoteCategory='';
 function renderBookNotes(g,c){
  const notesByCategory=new Map();
  for(const note of g.bookNotes||[]){
   if(!notesByCategory.has(note.category))notesByCategory.set(note.category,[]);
   notesByCategory.get(note.category).push(note);
  }
- c.innerHTML=[...notesByCategory].map(([category,notes])=>`<section class="book-notes-category">
-  <h3>${esc(category)}</h3>
+ if(!notesByCategory.has(bookNoteCategory))bookNoteCategory='';
+ const categories=[...notesByCategory.keys()];
+ const categoryOffset=c.querySelector('.book-note-categories')?.scrollLeft||0;
+ const picker=categories.length?`<div class="book-note-categories" role="group" aria-label="記事分類">
+  ${['',...categories].map(category=>`<button type="button" class="quiet" data-book-note-category="${esc(category)}" aria-pressed="${category===bookNoteCategory}">${esc(category||'全部')}</button>`).join('')}
+ </div>`:'';
+ const visibleNotes=bookNoteCategory?[[bookNoteCategory,notesByCategory.get(bookNoteCategory)]]:[...notesByCategory];
+ c.innerHTML=picker+(visibleNotes.map(([category,notes])=>`<section class="book-notes-category">
+  ${bookNoteCategory?'':`<h3>${esc(category)}</h3>`}
   ${notes.map(note=>`<article class="book-note">
    <div class="book-note-heading"><h4>${esc(note.title)}</h4>
     <button type="button" class="quiet" data-edit-book-note="${esc(note.id)}" aria-label="編輯記事 ${esc(note.title)}">編輯</button></div>
@@ -758,7 +766,19 @@ function renderBookNotes(g,c){
    </details>
    <div class="book-note-photos">${noteImages(note).map((src,index)=>`<button type="button" class="expense-photo-thumb" data-book-note-photo="${esc(note.id)}" data-photo-index="${index}" aria-label="放大 ${esc(note.title)} 的圖片 ${index+1}"><img loading="lazy" src="${esc(src)}" alt=""></button>`).join('')}</div>
   </article>`).join('')}
- </section>`).join('')||'<div class="empty"><p>還沒有記事。可以把商品照片、想買的規格和分店找貨進度放在同一篇。</p></div>';
+ </section>`).join('')||'<div class="empty"><p>還沒有記事。可以把商品照片、想買的規格和分店找貨進度放在同一篇。</p></div>');
+ const categoryBar=c.querySelector('.book-note-categories');
+ if(categoryBar){
+  categoryBar.scrollLeft=categoryOffset;
+  categoryBar.querySelectorAll('[data-book-note-category]').forEach(button=>{
+   button.onclick=()=>{
+    if(bookNoteCategory===button.dataset.bookNoteCategory)return;
+    bookNoteCategory=button.dataset.bookNoteCategory;
+    renderBookNotes(g,c);
+    c.querySelector('.book-note-categories [aria-pressed="true"]').focus({preventScroll:true});
+   };
+  });
+ }
  c.querySelectorAll('[data-edit-book-note]').forEach(button=>{
   button.onclick=()=>editBookNote(g,g.bookNotes.find(note=>note.id===button.dataset.editBookNote));
  });
@@ -782,7 +802,13 @@ async function saveBookNote(g,previous,nextNote){
  const bookNotes=previous?notes.flatMap(note=>note.id===previous.id?(nextNote?[nextNote]:[]):[note]):[...notes,nextNote];
  const next={...structuredClone(current),bookNotes};
  if(nextNote&&JSON.stringify(next).length>500000)throw Error('帳本容量已滿，請減少圖片後再儲存');
+ const selected=bookNoteCategory;
  await commit(next);
+ const updated=group();
+ if(selected&&nextNote&&nextNote.category!==bookNoteCategory&&tab==='notes'&&updated?.id===g.id){
+  bookNoteCategory=nextNote.category;
+  renderBookNotes(updated,$('content'));
+ }
 }
 function editBookNote(g,note){
  const notes=g.bookNotes||[];
@@ -840,6 +866,7 @@ function render(){const g=group();
   tab=g?pinnedTab(g)||'expenses':'expenses';
   itineraryView=null;
   itineraryDay='';
+  bookNoteCategory='';
   if(g)try{localStorage.setItem(preferenceKey('current'),g.id)}catch{}
  }
  if(tab!=='itinerary')itineraryView=null;

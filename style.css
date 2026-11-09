@@ -284,9 +284,10 @@ dialog:modal{
 .tab-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 #pinTab { min-width: 44px; min-height: 44px; padding: 4px; border: 1px solid transparent; }
 #pinTab[aria-pressed="true"] { border-color: var(--green); background: #e8eff3; }
-.itinerary-days { display: flex; gap: 8px; overflow-x: auto; padding: 3px 3px 10px; margin-bottom: 12px; }
-.itinerary-days button { flex: 0 0 auto; padding: 6px 12px; }
-.itinerary-days button[aria-pressed="true"] { background: var(--green); color: #fff; border-color: var(--green); }
+.itinerary-days, .book-note-categories { display: flex; gap: 8px; overflow-x: auto; padding: 3px 3px 10px; margin-bottom: 12px; }
+.itinerary-days button, .book-note-categories button { flex: 0 0 auto; padding: 6px 12px; }
+.itinerary-days button[aria-pressed="true"], .book-note-categories button[aria-pressed="true"] { background: var(--green); color: #fff; border-color: var(--green); }
+.book-note-categories button { max-width: 100%; overflow-wrap: anywhere; }
 .itinerary-days small { display: block; font-weight: 400; }
 .itinerary-day { margin-bottom: 18px; }
 .itinerary-day h3 { font-size: 14px; margin: 0 0 8px; color: var(--ink); }
