@@ -265,6 +265,15 @@ dialog:modal{
 /* Itinerary and per-book default view */
 .book nav button { flex: 1; position: relative; min-width: 0; padding-inline: 0; }
 .book nav button.pinned::after { content: "📌"; position: absolute; top: 0; right: 2px; font-size: 11px; }
+.book-notes-category { margin-bottom: 20px; }
+.book-notes-category h3 { margin: 0 0 8px; font-size: 14px; color: var(--green); overflow-wrap: anywhere; }
+.book-note { margin-bottom: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; overflow-wrap: anywhere; }
+.book-note-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.book-note-heading h4 { margin: 0; font-size: 15px; }
+.book-note-heading button { flex-shrink: 0; min-height: 36px; padding: 4px 8px; font-size: 12px; }
+.book-note p { margin: 8px 0 0; white-space: pre-wrap; }
+.book-note-photos:not(:empty) { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 8px; }
+.book-note-photos img { height: clamp(72px,22vw,150px); }
 .tab-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 #pinTab { min-width: 44px; min-height: 44px; padding: 4px; border: 1px solid transparent; }
 #pinTab[aria-pressed="true"] { border-color: var(--green); background: #e8eff3; }

@@ -4,7 +4,11 @@ const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"']/g,c=>(
 const storageKey=window.APP_CONFIG?.lineApiBase?'split-line-v1':'warm-split-v1';let state;try{state=JSON.parse(localStorage.getItem(storageKey));if(!state&&window.APP_CONFIG?.lineApiBase){const old=JSON.parse(localStorage.getItem('warm-split-v1')||'null');if(old)state={groups:old.groups.filter(g=>!g.cloud),current:null}}}catch{}state=state||{groups:[],current:null};let tab='expenses',profile=null,ready=false,openedBook='',itineraryView=null,itineraryDay='';
 const cfg=window.APP_CONFIG||{},activeGroups=()=>state.groups.filter(g=>!g.deletedAt&&(!cfg.lineApiBase||(cloud()&&g.cloud))),group=()=>activeGroups().find(g=>g.id===state.current),cloud=()=>!!window.WarmCloud?.user(),today=()=>new Date().toLocaleDateString('en-CA');
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').style.display='none',4000)}
-function persist(){localStorage.setItem(storageKey,JSON.stringify(state))}
+function persist(){
+ // LINE books are loaded from the server on sign-in. Keep local books in the cache.
+ const cached=cfg.lineApiBase?{...state,groups:state.groups.filter(g=>!g.cloud)}:state;
+ localStorage.setItem(storageKey,JSON.stringify(cached));
+}
 function showAuthRecovery(message){const box=$('formError');box.textContent=message;const button=document.createElement('button');button.type='button';button.className='quiet';button.textContent='重新登入 LINE';button.onclick=()=>window.WarmCloud.reconnect().catch(e=>{box.textContent=e.message});box.append(document.createElement('br'),button)}
 async function api(action,data={}){if(!window.WarmCloud)throw Error('雲端模組尚未載入，請稍後再試');try{return await window.WarmCloud.api(action,data)}catch(e){if(e.code==='resource-exhausted')throw Error('今日免費額度已用完，請稍後再試；不會自動收費');if(e.code==='permission-denied')throw Error('沒有權限，或 Firebase 共用規則尚未發布');throw e}}
 async function save(g){if(g.cloud){if(!cloud())throw Error(cfg.lineApiBase?'請先登入 LINE 再更新共用帳本':'請先登入 Google 再更新共用帳本');const r=await api('save',{group:g,version:g.version});Object.assign(g,r.group)}persist();render()}
@@ -200,7 +204,7 @@ function showBalanceDetails(memberId){
 function plan(g){const b=balances(g),deb=g.members.filter(m=>b[m.id]<0).map(m=>({...m,left:-b[m.id]})),cre=g.members.filter(m=>b[m.id]>0).map(m=>({...m,left:b[m.id]}));let out=[],i=0,j=0;while(i<deb.length&&j<cre.length){const amount=Math.min(deb[i].left,cre[j].left);out.push({from:deb[i].id,to:cre[j].id,amount});deb[i].left-=amount;cre[j].left-=amount;if(!deb[i].left)i++;if(!cre[j].left)j++}return out}
 const name=(g,id)=>g.members.find(m=>m.id===id)?.name||'未知成員';
 let itineraryTransportMode='transit';
-const bookTabs={itinerary:'行程',balances:'分帳結算',expenses:'花費明細',members:'成員'};
+const bookTabs={notes:'記事',itinerary:'行程',balances:'分帳結算',expenses:'花費明細',members:'成員'};
 function preferenceKey(kind,id=''){
  const account=window.WarmCloud?.user()?.uid||'local';
  return `${storageKey}:${kind}:${account}:${id}`;
@@ -674,6 +678,77 @@ function editItinerary(g,item,trigger){
   });
  };
 }
+function noteImages(note){
+ if(!Array.isArray(note?.images))return [];
+ return note.images.filter(src=>typeof src==='string'&&/^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(src));
+}
+function renderBookNotes(g,c){
+ const notesByCategory=new Map();
+ for(const note of g.bookNotes||[]){
+  if(!notesByCategory.has(note.category))notesByCategory.set(note.category,[]);
+  notesByCategory.get(note.category).push(note);
+ }
+ c.innerHTML=[...notesByCategory].map(([category,notes])=>`<section class="book-notes-category">
+  <h3>${esc(category)}</h3>
+  ${notes.map(note=>`<article class="book-note">
+   <div class="book-note-heading"><h4>${esc(note.title)}</h4>
+    <button type="button" class="quiet" data-edit-book-note="${esc(note.id)}" aria-label="編輯記事 ${esc(note.title)}">編輯</button></div>
+   ${note.text?`<p>${esc(note.text)}</p>`:''}
+   <div class="book-note-photos">${noteImages(note).map((src,index)=>`<button type="button" class="expense-photo-thumb" data-book-note-photo="${esc(note.id)}" data-photo-index="${index}" aria-label="放大 ${esc(note.title)} 的圖片 ${index+1}"><img loading="lazy" src="${esc(src)}" alt=""></button>`).join('')}</div>
+  </article>`).join('')}
+ </section>`).join('')||'<div class="empty"><p>還沒有記事。可以把商品照片、想買的規格和分店找貨進度放在同一篇。</p></div>';
+ c.querySelectorAll('[data-edit-book-note]').forEach(button=>{
+  button.onclick=()=>editBookNote(g,g.bookNotes.find(note=>note.id===button.dataset.editBookNote));
+ });
+ c.querySelectorAll('[data-book-note-photo]').forEach(button=>{
+  button.onclick=()=>{
+   const note=g.bookNotes.find(note=>note.id===button.dataset.bookNotePhoto);
+   const index=Number(button.dataset.photoIndex);
+   viewPhoto(noteImages(note)[index],`note-${index+1}.jpg`);
+  };
+ });
+}
+async function saveBookNote(g,previous,nextNote){
+ const current=group();
+ if(current?.id!==g.id)throw Error('帳本已切換，請重新開啟記事');
+ const notes=current.bookNotes||[];
+ const latest=notes.find(note=>note.id===(previous||nextNote).id);
+ if(JSON.stringify(latest)===JSON.stringify(nextNote||undefined))return;
+ if(JSON.stringify(latest)!==JSON.stringify(previous)){
+  throw Error('這篇記事已更新，請重新開啟後再試');
+ }
+ const bookNotes=previous?notes.flatMap(note=>note.id===previous.id?(nextNote?[nextNote]:[]):[note]):[...notes,nextNote];
+ const next={...structuredClone(current),bookNotes};
+ if(nextNote&&JSON.stringify(next).length>500000)throw Error('帳本容量已滿，請減少圖片後再儲存');
+ await commit(next);
+}
+function editBookNote(g,note){
+ const categories=[...new Set((g.bookNotes||[]).map(entry=>entry.category))];
+ const id=note?.id||uid();
+ let readImages;
+ modal(note?'編輯記事':'新增記事',
+  field('noteCategory','分類',note?.category||'','text','required maxlength="40" list="noteCategories" placeholder="例如：購物清單"')+
+  `<datalist id="noteCategories">${categories.map(category=>`<option value="${esc(category)}"></option>`).join('')}</datalist>`+
+  field('noteTitle','標題',note?.title||'','text','required maxlength="120" placeholder="例如：Olive Young 找貨清單"')+
+  `<label for="bookNoteText">文字</label>
+   <textarea class="itinerary-note" id="bookNoteText" name="noteText" rows="5" maxlength="6000" placeholder="記下商品名稱、色號、去過的分店和找貨進度">${esc(note?.text||'')}</textarea>
+   <div id="photoEditor"></div>
+   ${g.cloud?'<p class="hint">記事與圖片會同步給此帳本的成員。</p>':''}
+   ${note?'<button type="button" id="removeBookNote" class="quiet danger">刪除記事</button>':''}`,
+  '儲存記事',async form=>{
+   const category=form.get('noteCategory').trim(),title=form.get('noteTitle').trim();
+   if(!category||!title)throw Error('請填寫分類和標題');
+  await saveBookNote(g,note,{id,category,title,text:form.get('noteText').trim(),images:[...await readImages()]});
+  });
+ readImages=imageEditor(noteImages(note),3,{maxLength:54000,caption:'記事圖片',filenamePrefix:'note'});
+ if(note)$('removeBookNote').onclick=()=>{
+  if($('submit').disabled)return;
+  modal('刪除記事',`<p>確定移除「${esc(note.title)}」和附在這篇記事的圖片？</p>
+   <button type="button" class="quiet" id="cancelRemoveBookNote">取消</button>`,
+   '確認刪除',()=>saveBookNote(g,note,null));
+  $('cancelRemoveBookNote').onclick=()=>{if(!$('submit').disabled)editBookNote(g,note)};
+ };
+}
 function render(){const g=group();
  const bookKey=g?preferenceKey('book',g.id):'';
  if(openedBook!==bookKey){
@@ -701,9 +776,12 @@ document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(
  pin.title=pinned?'取消置頂':'設為預設頁面';
  $('addExpense').hidden=tab!=='expenses';
  $('addItinerary').hidden=tab!=='itinerary';
- $('viewHint').textContent={itinerary:'依日期查看行程',expenses:'費用紀錄與換算明細',
+ $('addBookNote').hidden=tab!=='notes';
+ $('addBookNote').onclick=()=>editBookNote(g);
+ $('viewHint').textContent={notes:'依分類查看文字與圖片',itinerary:'依日期查看行程',expenses:'費用紀錄與換算明細',
   balances:'成員餘額 · 點金額查看計算明細',members:'管理帳本的分攤成員'}[tab];
  const c=$('content');
+ if(tab==='notes'){renderBookNotes(g,c);return}
  if(tab==='itinerary'){renderItinerary(g,c);return}
  if(tab==='expenses'){c.innerHTML=g.expenses.length?expenseDays(g.expenses).map(day=>`<section class="expense-day"><div class="day-heading"><h3>${esc(day.date)}</h3><span>${day.expenses.length} 筆 · NT$ ${money(day.total)}</span></div>${day.expenses.map(e=>`<button type="button" class="expense expense-summary shared-expense" data-expense="${esc(e.id)}" aria-label="查看費用：${esc(e.title)}"><span class="icon">${esc(e.category==='🧋'?'🥤':e.category)}</span><span class="detail"><strong>${esc(e.title)}</strong><small>${esc(name(g,e.payer))} 先付</small><span class="paid-total">NT$ ${briefMoney(e.baseCents)}</span></span><span class="amount"><small>${e.split.length} 人 · 各付</small>${e.baseCents%e.split.length?'約 ':''}NT$ ${briefMoney(Math.round(e.baseCents/e.split.length))}</span></button>`).join('')}</section>`).join(''):'<div class="empty"><div class="empty-symbol">▤</div><p>尚無費用，請點「記一筆」新增。</p></div>';c.querySelectorAll('[data-expense]').forEach(b=>b.onclick=()=>showExpense(b.dataset.expense))}else if(tab==='members'){c.innerHTML=g.members.map(m=>`<div class="person"><span class="avatar" aria-hidden="true">${memberAvatar(m)}</span><span class="detail">${esc(m.lineName||m.name)}${m.lineName&&m.lineName!==m.name?`<small>帳本暱稱：${esc(m.name)}</small>`:''}${cfg.lineApiBase&&(m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?'<small>你</small>':cfg.lineApiBase?`<small>${m.lineUserId||/^U[0-9a-f]{32}$/.test(m.id)?'已加入':'待配對'}</small>`:''}</span></div>`).join('')+(cfg.lineApiBase?`<p class="hint">只有加入此帳本的成員可以查看與記帳。${g.canDelete?'使用上方「邀請成員」分享加入連結。':'由帳本建立者邀請新成員。'}</p>`:'<button id="addMember" class="quiet" style="margin-top:20px">＋ 加入成員</button>');if(cfg.lineApiBase){const pay=document.createElement('button');pay.textContent='設定我的收款資訊';pay.className='quiet';pay.onclick=()=>openPayment(g.id, g.members.find(m=>m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?.id);c.append(pay)}if(cfg.lineApiBase&&g.canDelete){const add=document.createElement('button');add.textContent='＋ 預設成員';add.className='quiet';add.onclick=()=>modal('預設成員',field('name','成員暱稱','','text','required maxlength="40"')+'<p class="hint">可先替此成員記帳，朋友登入 LINE 後再認領。</p>','新增成員',async f=>{await requireMemberVersion();const r=await api('addMember',{groupId:g.id,name:f.get('name')});state.groups[state.groups.findIndex(x=>x.id===g.id)]=r.group;persist();render()});c.append(add)}if(!cfg.lineApiBase){$('addMember').onclick=()=>modal('新增成員',field('name','成員暱稱','','text','required maxlength="40"'),'加入',async f=>{const n=f.get('name').trim();if(!n||g.members.some(m=>m.name===n))throw Error('請輸入不同的暱稱');const next=structuredClone(g);next.members.push({id:uid(),name:n});await commit(next)})}}else{const b=balances(g),p=plan(g);c.innerHTML=mySettlement(g,p)+'<div class="balance-board">'+balanceRows(g,b)+'</div>'+suggestedTransfers(g,p,c)+repaymentHistory(g,c);c.querySelectorAll('[data-balance-member]').forEach(button=>{button.onclick=()=>showBalanceDetails(button.dataset.balanceMember)});
  c.querySelectorAll('[data-settle]').forEach(button=>{
