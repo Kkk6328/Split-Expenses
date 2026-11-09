@@ -2,7 +2,19 @@ if(window.APP_CONFIG.lineApiBase){
  const cfg=window.APP_CONFIG;
  let user=null,needsRenewal=false;
  const initialize=()=>window.lineReady||(window.lineReady=liff.init({liffId:cfg.liffId}));
- const signal=detail=>window.dispatchEvent(new CustomEvent('warm-auth',{detail}));
+ const homeScreen=window.navigator?.standalone===true||window.matchMedia?.('(display-mode: standalone)').matches;
+ function updateOpenInLine(){
+  const hint=document.getElementById('openInLineHint');
+  hint.hidden=!homeScreen||!!user;
+  if(hint.hidden)return;
+  const url=new URL('https://liff.line.me/'+cfg.liffId+'/');
+  if(location.hash.startsWith('#join='))url.hash=location.hash;
+  document.getElementById('openInLine').href=url.href;
+ }
+ const signal=detail=>{
+  updateOpenInLine();
+  window.dispatchEvent(new CustomEvent('warm-auth',{detail}));
+ };
  function expired(){
   user=null;needsRenewal=true;signal(null);
   document.getElementById('status').textContent='請重新登入';
@@ -53,10 +65,12 @@ if(window.APP_CONFIG.lineApiBase){
   api:request
  };
  document.getElementById('cloudLogin').hidden=true;
+ updateOpenInLine();
  window.addEventListener('load',async()=>{
   try{
    await initialize();
    if(!location.hash)try{const pending=sessionStorage.getItem('split-pending-invite');if(pending?.startsWith('#join=')){history.replaceState(null,'',location.pathname+location.search+pending);sessionStorage.removeItem('split-pending-invite')}}catch{}
+   updateOpenInLine();
    if(liff.isLoggedIn())await announce();
   }catch(e){
    if(e.code==='line-auth')return;
