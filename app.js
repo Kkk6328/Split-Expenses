@@ -748,6 +748,7 @@ function renderBookNotes(g,c){
   ${notes.map(note=>`<article class="book-note">
    <div class="book-note-heading"><h4>${esc(note.title)}</h4>
     <button type="button" class="quiet" data-edit-book-note="${esc(note.id)}" aria-label="編輯記事 ${esc(note.title)}">編輯</button></div>
+   ${note.address||note.mapUrl?mapAddressMarkup(note.address,note.mapUrl,note.title):''}
    ${note.text?`<p>${esc(note.text)}</p>`:''}
    ${note.purchaseNote?`<div class="book-note-purchase"><strong>購買備註</strong><p>${esc(note.purchaseNote)}</p></div>`:''}
    <details class="book-note-korean">
@@ -799,6 +800,8 @@ function editBookNote(g,note){
     field('noteCategoryName','新分類名稱','','text','required maxlength="40" placeholder="例如：購物清單"'+(selected?' disabled':''))
    }</div>`+
   field('noteTitle','標題',note?.title||'','text','required maxlength="120" placeholder="例如：Olive Young 找貨清單"')+
+  field('noteAddress','地址（選填）',note?.address||'','text','maxlength="240" placeholder="例如：서울 종로구 율곡로1길 7"')+
+  mapUrlField(note?.mapUrl)+
   `<label for="bookNoteText">文字</label>
    <textarea class="itinerary-note" id="bookNoteText" name="noteText" rows="5" maxlength="6000" placeholder="記下商品名稱、色號、去過的分店和找貨進度">${esc(note?.text||'')}</textarea>
    <label for="bookNotePurchase">購買備註（選填）</label>
@@ -810,8 +813,10 @@ function editBookNote(g,note){
    const category=(form.get('noteCategory')||form.get('noteCategoryName')||'').trim();
    const title=form.get('noteTitle').trim();
    if(!category||!title)throw Error('請填寫分類和標題');
+   const address=form.get('noteAddress').trim(),mapUrl=readMapUrl(form);
    const purchaseNote=form.get('purchaseNote').trim();
-   await saveBookNote(g,note,{id,category,title,text:form.get('noteText').trim(),images:[...await readImages()],...(purchaseNote?{purchaseNote}:{})});
+   await saveBookNote(g,note,{id,category,title,text:form.get('noteText').trim(),images:[...await readImages()],
+    ...(purchaseNote?{purchaseNote}:{}),...(address?{address}:{}),...(mapUrl?{mapUrl}:{})});
   });
  const categoryPicker=$('f-noteCategory'),categoryName=$('f-noteCategoryName');
  categoryPicker.onchange=()=>{
