@@ -697,8 +697,8 @@ function renderBookNotes(g,c){
    ${note.purchaseNote?`<div class="book-note-purchase"><strong>購買備註</strong><p>${esc(note.purchaseNote)}</p></div>`:''}
    <details class="book-note-korean">
     <summary>給店員看韓文</summary>
-    <p lang="ko">저기요, 이거 어디에 있어요?</p>
-    <p>不好意思，請問這個在哪裡？</p>
+    <p lang="ko">이거 어디 있어요?</p>
+    <p>請問這個在哪裡？</p>
    </details>
    <div class="book-note-photos">${noteImages(note).map((src,index)=>`<button type="button" class="expense-photo-thumb" data-book-note-photo="${esc(note.id)}" data-photo-index="${index}" aria-label="放大 ${esc(note.title)} 的圖片 ${index+1}"><img loading="lazy" src="${esc(src)}" alt=""></button>`).join('')}</div>
   </article>`).join('')}
