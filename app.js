@@ -799,6 +799,7 @@ document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(
  pin.setAttribute('aria-label',pinned?`取消置頂：${bookTabs[tab]}`:`設為預設頁面：${bookTabs[tab]}`);
  pin.title=pinned?'取消置頂':'設為預設頁面';
  $('addExpense').hidden=tab!=='expenses';
+ $('expenseFooter').hidden=tab!=='expenses';
  $('addItinerary').hidden=tab!=='itinerary';
  $('addBookNote').hidden=tab!=='notes';
  $('addBookNote').onclick=()=>editBookNote(g);
