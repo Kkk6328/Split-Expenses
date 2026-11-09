@@ -723,12 +723,20 @@ async function saveBookNote(g,previous,nextNote){
  await commit(next);
 }
 function editBookNote(g,note){
- const categories=[...new Set((g.bookNotes||[]).map(entry=>entry.category))];
+ const notes=g.bookNotes||[];
+ const categories=[...new Set(notes.map(entry=>entry.category))];
+ const selected=note?.category||notes.at(-1)?.category||'';
  const id=note?.id||uid();
  let readImages;
  modal(note?'編輯記事':'新增記事',
-  field('noteCategory','分類',note?.category||'','text','required maxlength="40" list="noteCategories" placeholder="例如：購物清單"')+
-  `<datalist id="noteCategories">${categories.map(category=>`<option value="${esc(category)}"></option>`).join('')}</datalist>`+
+  `<label for="f-noteCategory">分類</label>
+   <select id="f-noteCategory" name="noteCategory">
+    ${categories.map(category=>`<option value="${esc(category)}"${category===selected?' selected':''}>${esc(category)}</option>`).join('')}
+    <option value="">＋ 新增分類</option>
+   </select>
+   <div id="noteCategoryNew"${selected?' hidden':''}>${
+    field('noteCategoryName','新分類名稱','','text','required maxlength="40" placeholder="例如：購物清單"'+(selected?' disabled':''))
+   }</div>`+
   field('noteTitle','標題',note?.title||'','text','required maxlength="120" placeholder="例如：Olive Young 找貨清單"')+
   `<label for="bookNoteText">文字</label>
    <textarea class="itinerary-note" id="bookNoteText" name="noteText" rows="5" maxlength="6000" placeholder="記下商品名稱、色號、去過的分店和找貨進度">${esc(note?.text||'')}</textarea>
@@ -736,10 +744,17 @@ function editBookNote(g,note){
    ${g.cloud?'<p class="hint">記事與圖片會同步給此帳本的成員。</p>':''}
    ${note?'<button type="button" id="removeBookNote" class="quiet danger">刪除記事</button>':''}`,
   '儲存記事',async form=>{
-   const category=form.get('noteCategory').trim(),title=form.get('noteTitle').trim();
+   const category=(form.get('noteCategory')||form.get('noteCategoryName')||'').trim();
+   const title=form.get('noteTitle').trim();
    if(!category||!title)throw Error('請填寫分類和標題');
-  await saveBookNote(g,note,{id,category,title,text:form.get('noteText').trim(),images:[...await readImages()]});
+   await saveBookNote(g,note,{id,category,title,text:form.get('noteText').trim(),images:[...await readImages()]});
   });
+ const categoryPicker=$('f-noteCategory'),categoryName=$('f-noteCategoryName');
+ categoryPicker.onchange=()=>{
+  const creating=!categoryPicker.value;
+  $('noteCategoryNew').hidden=categoryName.disabled=!creating;
+  if(creating)categoryName.focus();
+ };
  readImages=imageEditor(noteImages(note),3,{maxLength:54000,caption:'記事圖片',filenamePrefix:'note'});
  if(note)$('removeBookNote').onclick=()=>{
   if($('submit').disabled)return;
