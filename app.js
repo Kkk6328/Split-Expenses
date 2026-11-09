@@ -292,6 +292,79 @@ function editItineraryDayLabel(g,date){
    await commit({...structuredClone(current),itineraryLabels});
   });
 }
+function showItineraryRecommendations(g,item){
+ const recommendations=g.itineraryRecommendations?.[item.id]||[];
+ const detail=(label,value)=>value?`<span class="itinerary-place-detail"><small>${label}</small>${esc(value)}</span>`:'';
+ const list=recommendations.map(entry=>`<li>
+  <div class="itinerary-recommendation-heading"><strong>${esc(entry.name)}</strong>
+  <button type="button" class="quiet" data-edit-recommendation="${esc(entry.id)}" aria-label="編輯推薦 ${esc(entry.name)}">編輯</button></div>
+  ${detail('亮點／必買／必點',entry.highlights)}
+  ${detail('地址',entry.address)}
+  ${detail('營業時間',entry.hours)}
+  ${detail('備註',entry.note)}
+ </li>`).join('');
+ modal('行程推薦',
+  `<p class="itinerary-recommendation-stop">${esc(item.place)}</p>`+
+  (list?`<ul class="itinerary-recommendation-list">${list}</ul>`:'<p class="hint">還沒有推薦。可以記下附近想逛的店、必買或必點的品項。</p>'),
+  '＋ 新增推薦',()=>{},()=>editItineraryRecommendation(g,item));
+ $('fields').querySelectorAll('[data-edit-recommendation]').forEach(button=>{
+  button.onclick=()=>editItineraryRecommendation(g,item,recommendations.find(entry=>entry.id===button.dataset.editRecommendation));
+ });
+ $('modal').scrollTop=0;
+}
+async function saveItineraryRecommendation(g,item,previous,next){
+ const current=group();
+ if(current?.id!==g.id)throw Error('帳本已切換，請重新開啟行程推薦');
+ const itineraryRecommendations={...current.itineraryRecommendations};
+ const entries=itineraryRecommendations[item.id]||[];
+ if(previous){
+  const latest=entries.find(entry=>entry.id===previous.id);
+  if(JSON.stringify(latest)!==JSON.stringify(previous))throw Error('這筆推薦已更新，請返回推薦清單再試');
+ }
+ const updated=previous
+  ? entries.flatMap(entry=>entry.id===previous.id?(next?[next]:[]):[entry])
+  : [...entries,next];
+ if(updated.length)itineraryRecommendations[item.id]=updated;
+ else delete itineraryRecommendations[item.id];
+ await commit({...structuredClone(current),itineraryRecommendations});
+}
+function editItineraryRecommendation(g,item,entry){
+ const back=()=>{
+  const current=group();
+  if(current?.id===g.id)showItineraryRecommendations(current,item);
+  else $('modal').close();
+ };
+ const name=field('recommendationName','店名／地點名稱',entry?.name||'','text','required maxlength="120"');
+ const highlights=field('recommendationHighlights','亮點／必買／必點（選填）',entry?.highlights||'','text','maxlength="240" placeholder="例如：限定商品、招牌餐點或附近景點"');
+ const address=field('recommendationAddress','地址（選填）',entry?.address||'','text','maxlength="240"');
+ const hours=field('recommendationHours','營業時間（選填）',entry?.hours||'','text','maxlength="240"');
+ modal(entry?'編輯推薦':'新增推薦',name+highlights+address+hours+
+  `<label for="recommendationNote">備註（選填）</label>
+   <textarea id="recommendationNote" name="recommendationNote" class="itinerary-note itinerary-note-fit" rows="2" maxlength="1000">${esc(entry?.note||'')}</textarea>
+   <p class="hint">帳本成員都看得到。</p>
+   <div class="itinerary-transfer-actions">
+    <button type="button" class="quiet" id="backToRecommendations">返回推薦清單</button>
+    ${entry?'<button type="button" class="quiet danger" id="removeRecommendation">刪除推薦</button>':''}
+   </div>`,
+  '儲存推薦',async form=>{
+   const name=form.get('recommendationName').trim();
+   if(!name)throw Error('請填寫店名或地點名稱');
+   await saveItineraryRecommendation(g,item,entry,{
+    id:entry?.id||uid(),name,highlights:form.get('recommendationHighlights').trim(),
+    address:form.get('recommendationAddress').trim(),hours:form.get('recommendationHours').trim(),
+    note:form.get('recommendationNote').trim()
+   });
+  },back);
+ $('backToRecommendations').onclick=()=>{if(!$('submit').disabled)back()};
+ if(entry)$('removeRecommendation').onclick=()=>{
+  if($('submit').disabled)return;
+  modal('刪除推薦',`<p>確定移除「${esc(entry.name)}」？</p>
+   <button type="button" class="quiet" id="cancelRemoveRecommendation">返回</button>`,
+   '確認刪除',()=>saveItineraryRecommendation(g,item,entry,null),back);
+  $('cancelRemoveRecommendation').onclick=()=>{if(!$('submit').disabled)editItineraryRecommendation(g,item,entry)};
+ };
+ $('f-recommendationName').focus();
+}
 function reorderItineraryDay(g,date,entries){
  const ordered=[...entries];
  modal(`調整 ${date.slice(5).replace('-','/')} 行程順序`,
@@ -383,18 +456,22 @@ function renderItinerary(g,c){
     ${notesReady&&entries.length>1?`<button type="button" class="quiet" data-itinerary-order="${esc(date)}" aria-label="調整第 ${dayNumber(date)} 天的順序">調整順序</button>`:''}</div>
    ${ordered.map((item,index)=>{
     const editable=notesReady&&(item.canEdit||item.sharedRevision);
-    const tag=editable?'button':'article';
+    const count=g.itineraryRecommendations?.[item.id]?.length||0;
     const previous=ordered[index-1];
-    return `${itineraryLegMarkup(previous,item,previous?.id!==originalPrevious.get(item.id))}<${tag} class="itinerary-item${item.endTime?' has-time-range':''}"${editable?` type="button" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}"`:''}>
+    return `${itineraryLegMarkup(previous,item,previous?.id!==originalPrevious.get(item.id))}<article class="itinerary-item${item.endTime?' has-time-range':''}">
      <span class="itinerary-clock">${item.time?`<time datetime="${esc(item.date+'T'+item.time)}">${esc(item.time)}</time>`:'未定時間'}${item.endTime?`–<time datetime="${esc(item.date+'T'+item.endTime)}">${esc(item.endTime)}</time>`:''}</span>
-     <span><strong>${esc(item.place)}</strong>
+     <strong>${esc(item.place)}</strong>
+     <div class="itinerary-item-actions">
+      <button type="button" class="quiet itinerary-recommendation-button" data-itinerary-recommendations="${esc(item.id)}" aria-label="${esc(item.place)}的行程推薦${count?`（${count} 筆）`:''}">推薦${count?` ${count}`:''}</button>
+      ${editable?`<button type="button" class="itinerary-edit" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}">編輯 ›</button>`:''}
+     </div>
+     <div class="itinerary-item-details">
       ${item.address?`<span class="itinerary-place-detail"><small>地址</small>${esc(item.address)}</span>`:''}
       ${item.openingHours?`<span class="itinerary-place-detail"><small>營業時間</small>${esc(item.openingHours)}</span>`:''}
       ${item.sharedNote?`<span class="itinerary-item-note"><small>所有成員可見</small>${esc(item.sharedNote)}</span>`:''}
       ${item.personalNote?`<span class="itinerary-item-note"><small>🔒 僅自己可見</small>${esc(item.personalNote)}</span>`:''}
-     </span>
-     ${editable?'<span class="itinerary-edit" aria-hidden="true">編輯 ›</span>':''}
-    </${tag}>`;
+     </div>
+    </article>`;
    }).join('')}</section>`;
   }).join('');
  c.querySelectorAll('[data-itinerary-day]').forEach(button=>{
@@ -420,6 +497,9 @@ function renderItinerary(g,c){
  c.querySelectorAll('[data-itinerary]').forEach(button=>{
   button.onclick=()=>editItinerary(g,items.find(item=>item.id===button.dataset.itinerary),button);
  });
+ c.querySelectorAll('[data-itinerary-recommendations]').forEach(button=>{
+  button.onclick=()=>showItineraryRecommendations(g,items.find(item=>item.id===button.dataset.itineraryRecommendations));
+ });
  c.querySelectorAll('[data-itinerary-label]').forEach(button=>{
   button.onclick=()=>editItineraryDayLabel(g,button.dataset.itineraryLabel);
  });
@@ -435,7 +515,7 @@ function editItinerary(g,item,trigger){
  const id=item?.id||uid();
  const canEditPersonalNote=!item||item.canEdit;
  const openedView=itineraryView;
- const originalTop=trigger?.getBoundingClientRect().top;
+ const originalTop=trigger?.closest('.itinerary-item').getBoundingClientRect().top;
  const content=$('content');
  const dayOffset=content.querySelector('.itinerary-days')?.scrollLeft;
  const {timeRangeReady,placeDetailsReady,transportReady}=itineraryView;
@@ -526,11 +606,12 @@ function editItinerary(g,item,trigger){
   renderItinerary(current,content);
   const days=content.querySelector('.itinerary-days');
   if(saved.stay&&days&&dayOffset!==undefined)days.scrollLeft=dayOffset;
-  const card=[...content.querySelectorAll('[data-itinerary]')].find(button=>button.dataset.itinerary===saved.id);
-  if(!card)return;
+  const editButton=[...content.querySelectorAll('[data-itinerary]')].find(button=>button.dataset.itinerary===saved.id);
+  if(!editButton)return;
+  const card=editButton.closest('.itinerary-item');
   requestAnimationFrame(()=>{
    if(!card.isConnected||$('modal').open)return;
-   card.focus({preventScroll:true});
+   editButton.focus({preventScroll:true});
    if(saved.stay&&originalTop!==undefined){
     const header=document.querySelector('header');
     const top=header&&getComputedStyle(header).position==='sticky'?header.getBoundingClientRect().bottom:0;

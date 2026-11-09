@@ -290,10 +290,11 @@ dialog:modal{
 .itinerary-transfer-actions button { min-height: 40px; padding: 4px 9px; font-size: 13px; }
 .itinerary-transfer-actions button[aria-pressed="true"] { background: var(--green); color: #fff; border-color: var(--green); }
 .itinerary-item {
+ position: relative;
  display: grid;
  grid-template-columns: 4.5em minmax(0,1fr) auto;
  align-items: start;
- gap: 8px;
+ gap: 0 8px;
  width: 100%;
  margin-bottom: 8px;
  padding: 12px;
@@ -305,14 +306,26 @@ dialog:modal{
  font-weight: 400;
  overflow-wrap: anywhere;
 }
-button.itinerary-item:hover { background: var(--soft); }
+.itinerary-item:has(.itinerary-edit:hover) { background: var(--soft); }
 .itinerary-item.has-time-range { grid-template-columns: 5.5rem minmax(0,1fr) auto; }
 .itinerary-clock { white-space: nowrap; }
 .itinerary-clock, .itinerary-item small, .itinerary-edit { color: var(--muted); font-size: 12px; }
+.itinerary-item-actions { display: flex; align-items: center; gap: 4px; }
+.itinerary-item-actions button { min-height: 32px; padding: 2px 6px; font-size: 12px; white-space: nowrap; }
+.itinerary-edit { background: transparent; }
+.itinerary-edit:hover { filter: none; }
+.itinerary-edit::before { content: ""; position: absolute; inset: 0; }
+.itinerary-recommendation-button { position: relative; z-index: 1; }
+.itinerary-item-details { grid-column: 2 / -1; }
 .itinerary-item small { display: block; }
 .itinerary-item-note, .itinerary-place-detail { display: block; margin-top: 5px; white-space: pre-wrap; }
 .itinerary-place-detail { color: var(--muted); font-size: 13px; }
 .itinerary-place-detail small { display: inline; font-weight: 600; margin-inline-end: 6px; }
+.itinerary-recommendation-stop { margin: 0 0 12px; color: var(--muted); overflow-wrap: anywhere; }
+.itinerary-recommendation-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.itinerary-recommendation-list li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; }
+.itinerary-recommendation-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.itinerary-recommendation-heading button { flex-shrink: 0; min-height: 36px; padding: 4px 8px; font-size: 12px; }
 .itinerary-note { display: block; width: 100%; resize: vertical; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .itinerary-note-fit { field-sizing: content; min-height: 46px; overflow: hidden; resize: none; }
 @media(max-width:760px) { .itinerary-note-fit { font-size: 16px; } }
