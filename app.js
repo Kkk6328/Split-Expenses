@@ -276,6 +276,22 @@ function orderedItineraryDay(entries,order){
  }
  return [...ordered,...remaining.values()];
 }
+function editItineraryDayLabel(g,date){
+ const previousLabel=g.itineraryLabels?.[date]||'';
+ modal('編輯行程標示',
+  field('dayLabel','行程標示',previousLabel,'text','maxlength="60" placeholder="例如：明洞 → 東大門"')+
+  '<p class="hint">帳本成員都看得到。留空後儲存即可清除。</p>',
+  '儲存',async form=>{
+   const label=form.get('dayLabel').trim();
+   if(label===previousLabel)return;
+   const current=group();
+   if(current?.id!==g.id||(current.itineraryLabels?.[date]||'')!==previousLabel)throw Error('行程標示已更新，請重新開啟編輯');
+   const itineraryLabels={...current.itineraryLabels};
+   if(label)itineraryLabels[date]=label;
+   else delete itineraryLabels[date];
+   await commit({...structuredClone(current),itineraryLabels});
+  });
+}
 function reorderItineraryDay(g,date,entries){
  const ordered=[...entries];
  modal(`調整 ${date.slice(5).replace('-','/')} 行程順序`,
@@ -359,7 +375,11 @@ function renderItinerary(g,c){
   visibleDays.map(([date,entries])=>{
    const ordered=orderedItineraryDay(entries,g.itineraryOrder?.[date]);
    const originalPrevious=new Map(entries.map((item,index)=>[item.id,entries[index-1]?.id]));
-   return `<section class="itinerary-day"><div class="itinerary-day-header"><h3>第 ${dayNumber(date)} 天 <span>${esc(date)}</span></h3>
+   const label=g.itineraryLabels?.[date]||'';
+   return `<section class="itinerary-day"><div class="itinerary-day-header"><div class="itinerary-day-title">
+    <h3>第 ${dayNumber(date)} 天 <span>${esc(date)}</span></h3>
+    <button type="button" class="quiet itinerary-day-label" data-itinerary-label="${esc(date)}"
+     aria-label="${label?`編輯行程標示：${esc(label)}`:'新增行程標示'}（第 ${dayNumber(date)} 天）">${label?esc(label):'＋ 行程標示'}</button></div>
     ${notesReady&&entries.length>1?`<button type="button" class="quiet" data-itinerary-order="${esc(date)}" aria-label="調整第 ${dayNumber(date)} 天的順序">調整順序</button>`:''}</div>
    ${ordered.map((item,index)=>{
     const editable=notesReady&&(item.canEdit||item.sharedRevision);
@@ -399,6 +419,9 @@ function renderItinerary(g,c){
  });
  c.querySelectorAll('[data-itinerary]').forEach(button=>{
   button.onclick=()=>editItinerary(g,items.find(item=>item.id===button.dataset.itinerary),button);
+ });
+ c.querySelectorAll('[data-itinerary-label]').forEach(button=>{
+  button.onclick=()=>editItineraryDayLabel(g,button.dataset.itineraryLabel);
  });
  c.querySelectorAll('[data-itinerary-order]').forEach(button=>{
   button.onclick=()=>{

@@ -278,6 +278,8 @@ dialog:modal{
 .itinerary-day-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .itinerary-day-header h3 { margin: 0; }
 .itinerary-day-header button { flex-shrink: 0; min-height: 36px; padding: 4px 8px; font-size: 12px; }
+.itinerary-day-title { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.itinerary-day-title .itinerary-day-label { max-width: 100%; overflow-wrap: anywhere; text-align: start; }
 .itinerary-order-list { margin: 0; padding-inline-start: 24px; }
 .itinerary-order-list li { padding: 6px 0; border-bottom: 1px solid var(--line); }
 .itinerary-order-list li > span { display: inline-block; width: calc(100% - 96px); overflow-wrap: anywhere; vertical-align: middle; }
