@@ -3,6 +3,22 @@ if(window.APP_CONFIG.lineApiBase){
  let user=null,needsRenewal=false;
  const initialize=()=>window.lineReady||(window.lineReady=liff.init({liffId:cfg.liffId}));
  const homeScreen=window.navigator?.standalone===true||window.matchMedia?.('(display-mode: standalone)').matches;
+ const homeLogin=new URL(location.href).searchParams.get('homeLogin');
+ let loginWindow;
+ function openHomeScreenLogin(renew=false){
+  if(loginWindow&&!loginWindow.closed){loginWindow.focus();return}
+  const url=new URL(location.href);
+  url.search=renew?'?homeLogin=renew':'?homeLogin=start';
+  url.hash='';
+  loginWindow=window.open(url.href,'_blank','popup');
+  if(!loginWindow)throw Error('無法開啟 LINE 登入視窗，請允許彈出視窗後再試。');
+ }
+ window.addEventListener('message',event=>{
+  if(loginWindow&&event.source===loginWindow&&event.origin===new URL(location.href).origin&&event.data==='split-home-login-complete'){
+   loginWindow=null;
+   location.reload();
+  }
+ });
  function updateOpenInLine(){
   const hint=document.getElementById('openInLineHint');
   hint.hidden=!homeScreen||!!user;
@@ -42,6 +58,7 @@ if(window.APP_CONFIG.lineApiBase){
   signal({uid:user.uid,name:user.displayName});
  }
  async function reconnect(){
+  if(homeScreen&&!homeLogin)return openHomeScreenLogin(true);
   await initialize();
   user=null;signal(null);
   if(liff.isInClient()){
@@ -59,7 +76,13 @@ if(window.APP_CONFIG.lineApiBase){
  }
  window.WarmCloud={
   user:()=>user,
-  login:async()=>{await initialize();if(needsRenewal)return reconnect();if(!liff.isLoggedIn()){if(liff.isInClient())return reconnect();liff.login({redirectUri:location.href});return}await announce()},
+  login:async()=>{
+   if(homeScreen&&!homeLogin&&!user)return openHomeScreenLogin(needsRenewal);
+   await initialize();
+   if(needsRenewal)return reconnect();
+   if(!liff.isLoggedIn()){if(liff.isInClient())return reconnect();liff.login({redirectUri:location.href});return}
+   await announce();
+  },
   reconnect,
   logout:async()=>{user=null;signal(null);if(!liff.isInClient()){liff.logout();location.reload()}else{document.getElementById('status').textContent='已登出此頁面'}},
   api:request
@@ -71,7 +94,22 @@ if(window.APP_CONFIG.lineApiBase){
    await initialize();
    if(!location.hash)try{const pending=sessionStorage.getItem('split-pending-invite');if(pending?.startsWith('#join=')){history.replaceState(null,'',location.pathname+location.search+pending);sessionStorage.removeItem('split-pending-invite')}}catch{}
    updateOpenInLine();
-   if(liff.isLoggedIn())await announce();
+   if((homeLogin==='start'||homeLogin==='renew')&&!liff.isInClient()){
+    if(homeLogin==='renew'&&liff.isLoggedIn())liff.logout();
+    if(!liff.isLoggedIn()){
+     const url=new URL(location.href);
+     url.searchParams.set('homeLogin','return');
+     liff.login({redirectUri:url.href});
+     return;
+    }
+   }
+   if(liff.isLoggedIn()){
+    await announce();
+    if(homeLogin&&window.opener){
+     window.opener.postMessage('split-home-login-complete',new URL(location.href).origin);
+     window.close();
+    }
+   }
   }catch(e){
    if(e.code==='line-auth')return;
    user=null;signal(null);
