@@ -246,25 +246,30 @@ function koreanSubwayRoute(method){
 }
 const transportModes=[['transit','地鐵／步行'],['car','搭車']];
 const isCarTransport=option=>/計程車|計程|開車|自駕|機場接送|包車|搭車|taxi|uber/i.test(option?.method||'');
+function itineraryPlaceNames(place){
+ const match=place.match(/^(.+?)\s*[（(]([^（）()]*[가-힣][^（）()]*)[）)]\s*$/u);
+ return match?[match[1],match[2]]:[place,''];
+}
 function itineraryLegMarkup(previous,item,routeChanged){
  const options=item.transport||[];
  if(!previous&&!options.length)return '';
  const matches=options.filter(option=>isCarTransport(option)===(itineraryTransportMode==='car'));
- const placeName=stop=>esc(stop.place.replace(/\s*[（(][^（）()]*[가-힣][^（）()]*[）)]$/u,''));
+ const placeName=stop=>esc(itineraryPlaceNames(stop.place)[0]);
+ const endpoints=`${previous?`${placeName(previous)} → `:'前往 '}${placeName(item)}`;
  const routes=(matches.length?matches:options).map(option=>{
   const {method,duration,cost}=option;
   const korean=koreanSubwayRoute(method);
   const mode=isCarTransport(option)?'搭車':/地鐵|\d+\s*號線/.test(method)?'地鐵':/步行|走路/.test(method)?'步行':'';
-  return `<div class="itinerary-leg-option">
-   <div class="itinerary-leg-facts"><strong class="${duration?'':'itinerary-leg-unset'}">${esc(duration||'未填交通時間')}</strong>${mode?`<span>${mode}</span>`:''}${cost?`<span>${esc(cost)}</span>`:''}</div>
-   ${method?`<details class="itinerary-leg-details"><summary>${korean?'路線與韓文對照':'交通詳情'}</summary>
-    <div class="itinerary-leg-method">${esc(method)}</div>${korean?`<div class="itinerary-transit-korean" lang="ko">${esc(korean)}</div>`:''}
-   </details>`:''}</div>`;
+  return `<details class="itinerary-leg-details">
+   <summary><span class="itinerary-leg-facts">${mode?`<span>${mode}</span>`:''}<strong class="${duration?'':'itinerary-leg-unset'}">${esc(duration||'未填交通時間')}</strong>${cost?`<span>${esc(cost)}</span>`:''}</span><span class="itinerary-leg-toggle">路線</span></summary>
+   <div class="itinerary-leg-body"><div class="itinerary-leg-places">${endpoints}</div>
+    ${method?`<div class="itinerary-leg-method">${esc(method)}</div>`:''}${korean?`<div class="itinerary-transit-korean" lang="ko">${esc(korean)}</div>`:''}
+   </div>
+  </details>`;
  }).join('');
  return `<div class="itinerary-leg">
   <span class="itinerary-leg-arrow" aria-hidden="true">↓</span>
-  <div class="itinerary-leg-body">
-   <div class="itinerary-leg-places">${previous?`${placeName(previous)} → `:'前往 '}<strong>${placeName(item)}</strong></div>
+  <div class="itinerary-leg-content">
    ${routeChanged&&routes?'<div class="itinerary-leg-unset">前一站已調整，請確認下方交通資料</div>':''}
    ${routes||'<div class="itinerary-leg-unset">未填交通時間</div>'}
   </div></div>`;
@@ -462,19 +467,23 @@ function renderItinerary(g,c){
     const editable=notesReady&&(item.canEdit||item.sharedRevision);
     const count=g.itineraryRecommendations?.[item.id]?.length||0;
     const previous=ordered[index-1];
+    const [place,localName]=itineraryPlaceNames(item.place);
+    const hasNotes=item.sharedNote||item.personalNote;
     return `${itineraryLegMarkup(previous,item,previous?.id!==originalPrevious.get(item.id))}<article class="itinerary-item${item.endTime?' has-time-range':''}">
      <span class="itinerary-clock">${item.time?`<time datetime="${esc(item.date+'T'+item.time)}">${esc(item.time)}</time>`:'未定時間'}${item.endTime?`–<time datetime="${esc(item.date+'T'+item.endTime)}">${esc(item.endTime)}</time>`:''}</span>
-     <strong>${esc(item.place)}</strong>
+     <strong class="itinerary-item-name">${esc(place)}</strong>
      <div class="itinerary-item-actions">
       <button type="button" class="quiet itinerary-recommendation-button" data-itinerary-recommendations="${esc(item.id)}" aria-label="${esc(item.place)}的行程推薦${count?`（${count} 筆）`:''}">推薦${count?` ${count}`:''}</button>
       ${editable?`<button type="button" class="itinerary-edit" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}">編輯 ›</button>`:''}
      </div>
-     <div class="itinerary-item-details">
+     ${localName||item.address||item.openingHours||hasNotes?`<details class="itinerary-item-details">
+      <summary>${hasNotes?'地點詳情與備註':'地點詳情'}</summary>
+      ${localName?`<span class="itinerary-place-detail" lang="ko">${esc(localName)}</span>`:''}
       ${item.address?`<span class="itinerary-place-detail"><small>地址</small>${esc(item.address)}</span>`:''}
       ${item.openingHours?`<span class="itinerary-place-detail"><small>營業時間</small>${esc(item.openingHours)}</span>`:''}
       ${item.sharedNote?`<span class="itinerary-item-note"><small>所有成員可見</small>${esc(item.sharedNote)}</span>`:''}
       ${item.personalNote?`<span class="itinerary-item-note"><small>🔒 僅自己可見</small>${esc(item.personalNote)}</span>`:''}
-     </div>
+     </details>`:''}
     </article>`;
    }).join('')}</section>`;
   }).join('');
