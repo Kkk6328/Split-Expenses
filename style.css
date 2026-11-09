@@ -344,6 +344,9 @@ dialog:modal{
 .itinerary-item-note, .itinerary-place-detail { display: block; margin-top: 5px; white-space: pre-wrap; }
 .itinerary-place-detail { color: var(--muted); font-size: 13px; }
 .itinerary-place-detail small { display: inline; font-weight: 600; margin-inline-end: 6px; }
+.itinerary-map-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; }
+.itinerary-map-actions a { padding-block: 8px; color: var(--green); }
+.itinerary-map-actions button { min-height: 32px; padding: 4px 8px; }
 .itinerary-recommendation-stop { margin: 0 0 12px; color: var(--muted); overflow-wrap: anywhere; }
 .itinerary-recommendation-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .itinerary-recommendation-list li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; }

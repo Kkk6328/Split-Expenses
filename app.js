@@ -250,6 +250,47 @@ function itineraryPlaceNames(place){
  const match=place.match(/^(.+?)\s*[（(]([^（）()]*[가-힣][^（）()]*)[）)]\s*$/u);
  return match?[match[1],match[2]]:[place,''];
 }
+function safeMapUrl(value){
+ try{
+  const url=new URL(value);
+  return url.protocol==='https:'&&!url.username&&!url.password?url.href:'';
+ }catch{return ''}
+}
+function readMapUrl(form){
+ const value=form.get('mapUrl').trim();
+ const url=safeMapUrl(value);
+ if(value&&!url)throw Error('請貼上以 https:// 開頭的地圖連結。');
+ return url;
+}
+function mapUrlField(value=''){
+ return field('mapUrl','地址連結（選填）',value,'url','maxlength="2048" placeholder="例如：https://naver.me/…"');
+}
+function mapAddressMarkup(address,url,place,action=''){
+ const [name,localName]=itineraryPlaceNames(place);
+ const search=[address,localName,name].find(text=>/[가-힣]/u.test(text||''));
+ const custom=safeMapUrl(url);
+ const href=custom||(search?`https://map.naver.com/p/search/${encodeURIComponent(search.trim())}`:'');
+ return (address?`<span class="itinerary-place-detail"><small>地址</small>${esc(address)}</span>`:'')+
+  (href||action?`<div class="itinerary-map-actions">${href?`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${custom?'開啟地圖 ↗':'NAVER 地圖搜尋 ↗'}</a>`:''}${action}</div>`:'');
+}
+const itineraryMapKey=item=>JSON.stringify([item.place.trim(),(item.address||'').trim()]);
+function editItineraryMap(g,item){
+ const key=itineraryMapKey(item);
+ const previous=g.itineraryMapLinks?.[key]||'';
+ modal('設定地址連結',
+  `<p class="hint">${esc(item.place)}${item.address?` · ${esc(item.address)}`:''}</p>`+
+  mapUrlField(previous)+'<p class="hint">有韓文地址或店名時，留空會使用 NAVER 地圖搜尋。相同地點和地址會共用連結。</p>',
+  '儲存連結',async form=>{
+   const url=readMapUrl(form);
+   if(url===previous)return;
+   const current=group();
+   if(current?.id!==g.id||(current.itineraryMapLinks?.[key]||'')!==previous)throw Error('地址連結已更新，請重新開啟編輯');
+   const itineraryMapLinks={...current.itineraryMapLinks};
+   if(url)itineraryMapLinks[key]=url;
+   else delete itineraryMapLinks[key];
+   await commit({...structuredClone(current),itineraryMapLinks});
+  });
+}
 function itineraryLegMarkup(previous,item,routeChanged){
  const options=item.transport||[];
  if(!previous&&!options.length)return '';
@@ -308,7 +349,7 @@ function showItineraryRecommendations(g,item){
   <div class="itinerary-recommendation-heading"><strong>${esc(entry.name)}</strong>
   <button type="button" class="quiet" data-edit-recommendation="${esc(entry.id)}" aria-label="編輯推薦 ${esc(entry.name)}">編輯</button></div>
   ${detail('亮點／必買／必點',entry.highlights)}
-  ${detail('地址',entry.address)}
+  ${mapAddressMarkup(entry.address,entry.mapUrl,entry.name)}
   ${detail('營業時間',entry.hours)}
   ${detail('備註',entry.note)}
  </li>`).join('');
@@ -347,7 +388,7 @@ function editItineraryRecommendation(g,item,entry){
  const highlights=field('recommendationHighlights','亮點／必買／必點（選填）',entry?.highlights||'','text','maxlength="240" placeholder="例如：限定商品、招牌餐點或附近景點"');
  const address=field('recommendationAddress','地址（選填）',entry?.address||'','text','maxlength="240"');
  const hours=field('recommendationHours','營業時間（選填）',entry?.hours||'','text','maxlength="240"');
- modal(entry?'編輯推薦':'新增推薦',name+highlights+address+hours+
+ modal(entry?'編輯推薦':'新增推薦',name+highlights+address+mapUrlField(entry?.mapUrl)+hours+
   `<label for="recommendationNote">備註（選填）</label>
    <textarea id="recommendationNote" name="recommendationNote" class="itinerary-note itinerary-note-fit" rows="2" maxlength="1000">${esc(entry?.note||'')}</textarea>
    <p class="hint">帳本成員都看得到。</p>
@@ -360,7 +401,7 @@ function editItineraryRecommendation(g,item,entry){
    if(!name)throw Error('請填寫店名或地點名稱');
    await saveItineraryRecommendation(g,item,entry,{
     id:entry?.id||uid(),name,highlights:form.get('recommendationHighlights').trim(),
-    address:form.get('recommendationAddress').trim(),hours:form.get('recommendationHours').trim(),
+    address:form.get('recommendationAddress').trim(),mapUrl:readMapUrl(form),hours:form.get('recommendationHours').trim(),
     note:form.get('recommendationNote').trim()
    });
   },back);
@@ -469,6 +510,8 @@ function renderItinerary(g,c){
     const previous=ordered[index-1];
     const [place,localName]=itineraryPlaceNames(item.place);
     const hasNotes=item.sharedNote||item.personalNote;
+    const mapButton=editable?`<button type="button" class="quiet" data-itinerary-map="${esc(item.id)}" aria-label="設定 ${esc(place)} 的地址連結">設定連結</button>`:'';
+    const mapAddress=mapAddressMarkup(item.address,g.itineraryMapLinks?.[itineraryMapKey(item)],item.place,mapButton);
     return `${itineraryLegMarkup(previous,item,previous?.id!==originalPrevious.get(item.id))}<article class="itinerary-item${item.endTime?' has-time-range':''}">
      <span class="itinerary-clock">${item.time?`<time datetime="${esc(item.date+'T'+item.time)}">${esc(item.time)}</time>`:'未定時間'}${item.endTime?`–<time datetime="${esc(item.date+'T'+item.endTime)}">${esc(item.endTime)}</time>`:''}</span>
      <strong class="itinerary-item-name">${esc(place)}</strong>
@@ -476,10 +519,10 @@ function renderItinerary(g,c){
       <button type="button" class="quiet itinerary-recommendation-button" data-itinerary-recommendations="${esc(item.id)}" aria-label="${esc(item.place)}的行程推薦${count?`（${count} 筆）`:''}">推薦${count?` ${count}`:''}</button>
       ${editable?`<button type="button" class="itinerary-edit" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}">編輯 ›</button>`:''}
      </div>
-     ${localName||item.address||item.openingHours||hasNotes?`<details class="itinerary-item-details">
+     ${localName||mapAddress||item.openingHours||hasNotes?`<details class="itinerary-item-details">
       <summary>${hasNotes?'地點詳情與備註':'地點詳情'}</summary>
       ${localName?`<span class="itinerary-place-detail" lang="ko">${esc(localName)}</span>`:''}
-      ${item.address?`<span class="itinerary-place-detail"><small>地址</small>${esc(item.address)}</span>`:''}
+      ${mapAddress}
       ${item.openingHours?`<span class="itinerary-place-detail"><small>營業時間</small>${esc(item.openingHours)}</span>`:''}
       ${item.sharedNote?`<span class="itinerary-item-note"><small>所有成員可見</small>${esc(item.sharedNote)}</span>`:''}
       ${item.personalNote?`<span class="itinerary-item-note"><small>🔒 僅自己可見</small>${esc(item.personalNote)}</span>`:''}
@@ -512,6 +555,9 @@ function renderItinerary(g,c){
  });
  c.querySelectorAll('[data-itinerary-recommendations]').forEach(button=>{
   button.onclick=()=>showItineraryRecommendations(g,items.find(item=>item.id===button.dataset.itineraryRecommendations));
+ });
+ c.querySelectorAll('[data-itinerary-map]').forEach(button=>{
+  button.onclick=()=>editItineraryMap(g,items.find(item=>item.id===button.dataset.itineraryMap));
  });
  c.querySelectorAll('[data-itinerary-label]').forEach(button=>{
   button.onclick=()=>editItineraryDayLabel(g,button.dataset.itineraryLabel);
