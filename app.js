@@ -694,6 +694,12 @@ function renderBookNotes(g,c){
    <div class="book-note-heading"><h4>${esc(note.title)}</h4>
     <button type="button" class="quiet" data-edit-book-note="${esc(note.id)}" aria-label="編輯記事 ${esc(note.title)}">編輯</button></div>
    ${note.text?`<p>${esc(note.text)}</p>`:''}
+   ${note.purchaseNote?`<div class="book-note-purchase"><strong>購買備註</strong><p>${esc(note.purchaseNote)}</p></div>`:''}
+   <details class="book-note-korean">
+    <summary>給店員看韓文</summary>
+    <p lang="ko">저기요, 이거 어디에 있어요?</p>
+    <p>不好意思，請問這個在哪裡？</p>
+   </details>
    <div class="book-note-photos">${noteImages(note).map((src,index)=>`<button type="button" class="expense-photo-thumb" data-book-note-photo="${esc(note.id)}" data-photo-index="${index}" aria-label="放大 ${esc(note.title)} 的圖片 ${index+1}"><img loading="lazy" src="${esc(src)}" alt=""></button>`).join('')}</div>
   </article>`).join('')}
  </section>`).join('')||'<div class="empty"><p>還沒有記事。可以把商品照片、想買的規格和分店找貨進度放在同一篇。</p></div>';
@@ -740,6 +746,8 @@ function editBookNote(g,note){
   field('noteTitle','標題',note?.title||'','text','required maxlength="120" placeholder="例如：Olive Young 找貨清單"')+
   `<label for="bookNoteText">文字</label>
    <textarea class="itinerary-note" id="bookNoteText" name="noteText" rows="5" maxlength="6000" placeholder="記下商品名稱、色號、去過的分店和找貨進度">${esc(note?.text||'')}</textarea>
+   <label for="bookNotePurchase">購買備註（選填）</label>
+   <textarea class="itinerary-note itinerary-note-fit" id="bookNotePurchase" name="purchaseNote" rows="2" maxlength="2000" placeholder="例如：買 2 盒、要 02 色，缺貨可換 03 色">${esc(note?.purchaseNote||'')}</textarea>
    <div id="photoEditor"></div>
    ${g.cloud?'<p class="hint">記事與圖片會同步給此帳本的成員。</p>':''}
    ${note?'<button type="button" id="removeBookNote" class="quiet danger">刪除記事</button>':''}`,
@@ -747,7 +755,8 @@ function editBookNote(g,note){
    const category=(form.get('noteCategory')||form.get('noteCategoryName')||'').trim();
    const title=form.get('noteTitle').trim();
    if(!category||!title)throw Error('請填寫分類和標題');
-   await saveBookNote(g,note,{id,category,title,text:form.get('noteText').trim(),images:[...await readImages()]});
+   const purchaseNote=form.get('purchaseNote').trim();
+   await saveBookNote(g,note,{id,category,title,text:form.get('noteText').trim(),images:[...await readImages()],...(purchaseNote?{purchaseNote}:{})});
   });
  const categoryPicker=$('f-noteCategory'),categoryName=$('f-noteCategoryName');
  categoryPicker.onchange=()=>{
