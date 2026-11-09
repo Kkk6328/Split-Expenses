@@ -26,7 +26,7 @@ async function itinerary(db, bookId, user, body){
    CASE WHEN author=?1 THEN
     CASE private_note WHEN 1 THEN note WHEN 2 THEN json_extract(note,'$.personal') ELSE '' END
     ELSE '' END AS personalNote,
-   author=?1 AS canEdit, CASE WHEN author=?1 THEN revision ELSE '' END AS revision
+   author=?1 AS canEdit, CASE WHEN author=?1 THEN revision ELSE '' END AS revision, revision AS sharedRevision
    FROM book_itinerary WHERE book_id=?2
    ORDER BY date, book_itinerary.time='', book_itinerary.time, id`).bind(user,bookId).all();
   return {notesVersion:2,timeRangeVersion:1,placeDetailsVersion:1,transportVersion:1,items:results.map(({transportJson,...item})=>({...item,transport:JSON.parse(transportJson),canEdit:!!item.canEdit,
@@ -45,6 +45,9 @@ async function itinerary(db, bookId, user, body){
  }
 
  const {date,time,endTime='',privateNote}=body;
+ const sharedOnly=body.sharedOnly===true;
+ if(sharedOnly&&(!revision||!Object.hasOwn(body,'sharedNote')||Object.hasOwn(body,'personalNote')))
+  fail('只能更新現有行程的共用內容');
  const place=typeof body.place==='string'?body.place.trim():'';
  const dualNotes=Object.hasOwn(body,'sharedNote')||Object.hasOwn(body,'personalNote');
  const hasPlaceDetails=Object.hasOwn(body,'address')||Object.hasOwn(body,'openingHours');
@@ -67,7 +70,8 @@ async function itinerary(db, bookId, user, body){
  }
  let note,mode;
  if(dualNotes){
-  const {sharedNote,personalNote}=body;
+  const {sharedNote}=body;
+  const personalNote=sharedOnly?'':body.personalNote;
   if(typeof sharedNote!=='string'||typeof personalNote!=='string'
    ||sharedNote.trim().length>1000||personalNote.trim().length>1000)fail('每格備註最多 1000 字');
   // Mode 2 stores the notes and optional place details in the existing column.
@@ -100,13 +104,15 @@ async function itinerary(db, bookId, user, body){
    AND date=? AND time=? AND place=? AND note=? AND private_note=?`).bind(bookId,id,user,...values.slice(0,5)).first();
   if(prior)return {ok:true};
  }else{
-  const result=await db.prepare(`UPDATE book_itinerary SET date=?,time=?,place=?,note=?,private_note=?,revision=?
-   WHERE book_id=? AND id=? AND author=? AND revision=? AND (private_note<>2 OR ?=2) AND (length(time)<=5 OR ?=1)
+  const noteExpression=sharedOnly?`json_set(?, '$.personal', CASE private_note
+   WHEN 1 THEN note WHEN 2 THEN COALESCE(json_extract(note,'$.personal'),'') ELSE '' END)`:'?';
+  const result=await db.prepare(`UPDATE book_itinerary SET date=?,time=?,place=?,note=${noteExpression},private_note=?,revision=?
+   WHERE book_id=? AND id=?${sharedOnly?'':' AND author=?'} AND revision=? AND (private_note<>2 OR ?=2) AND (length(time)<=5 OR ?=1)
     AND CASE WHEN private_note=2 AND ?=0 THEN
       COALESCE(json_extract(note,'$.address'),'')='' AND COALESCE(json_extract(note,'$.openingHours'),'')=''
      ELSE 1 END
     AND CASE WHEN private_note=2 AND ?=0 THEN COALESCE(json_array_length(note,'$.transport'),0)=0 ELSE 1 END`)
-   .bind(...values,bookId,id,user,revision,mode,Number(Object.hasOwn(body,'endTime')),Number(hasPlaceDetails),Number(hasTransport)).run();
+   .bind(...values,bookId,id,...(sharedOnly?[]:[user]),revision,mode,Number(Object.hasOwn(body,'endTime')),Number(hasPlaceDetails),Number(hasTransport)).run();
   if(result.meta.changes)return {ok:true};
  }
  fail('行程已變更或無權限，請重新載入',409);

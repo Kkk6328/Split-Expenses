@@ -48,12 +48,18 @@ test('itinerary uses book membership, protects private notes and checks author r
  assert.equal(own.canEdit,true);
  const {items}=await api('friend','listItinerary');
  assert.deepEqual(items,[{id:'stop',date:record.date,time:record.time,endTime:'',place:record.place,address:'',openingHours:'',transport:[],
-  sharedNote:'',personalNote:'',note:'',privateNote:false,canEdit:false,revision:''}]);
+  sharedNote:'',personalNote:'',note:'',privateNote:false,canEdit:false,revision:'',sharedRevision:own.revision}]);
  await api('outsider','listItinerary',{},403);
  await api('owner','listItinerary',{groupId:'deleted'},403);
  await api('friend','saveItinerary',{...record,revision:own.revision},409);
  await api('friend','deleteItinerary',{id:record.id,revision:own.revision},409);
- await api('owner','saveItinerary',{...record,revision:own.revision,privateNote:false});
+ await api('friend','saveItinerary',{id:record.id,date:record.date,time:record.time,place:record.place,
+  revision:own.revision,sharedOnly:true,sharedNote:'共用補充'});
+ const {items:[converted]}=await api('owner','listItinerary');
+ assert.equal(converted.personalNote,record.note);
+ assert.equal(converted.sharedNote,'共用補充');
+ await api('owner','saveItinerary',{id:record.id,date:record.date,time:record.time,place:record.place,
+  revision:converted.revision,sharedNote:record.note,personalNote:record.note});
  const {items:[shared]}=await api('friend','listItinerary');
  assert.equal(shared.sharedNote,record.note);
  assert.equal(shared.personalNote,'');
@@ -126,6 +132,26 @@ test('itinerary uses book membership, protects private notes and checks author r
  assert.deepEqual(clearedTransport.transport,[]);
  assert.equal(clearedTransport.sharedNote,details.sharedNote);
  assert.equal(clearedTransport.personalNote,details.personalNote);
- await api('owner','deleteItinerary',{id:record.id,revision:clearedTransport.revision});
+ const sharedEdit={id:record.id,revision:clearedTransport.sharedRevision,date:'2026-12-03',time:'14:00',endTime:'15:00',
+  place:'換到下一天',address:'新地址',openingHours:'14:00 起',transport,sharedNote:'旅伴更新',sharedOnly:true};
+ await api('outsider','saveItinerary',sharedEdit,403);
+ await api('friend','saveItinerary',{...sharedEdit,revision:''},400);
+ await api('friend','saveItinerary',{...sharedEdit,personalNote:'嘗試修改私人備註'},400);
+ await api('friend','saveItinerary',sharedEdit);
+ await api('friend','saveItinerary',sharedEdit,409);
+ const {items:[friendEdit]}=await api('friend','listItinerary');
+ assert.equal(friendEdit.sharedNote,sharedEdit.sharedNote);
+ assert.equal(friendEdit.date,sharedEdit.date);
+ assert.equal(friendEdit.time,sharedEdit.time);
+ assert.equal(friendEdit.endTime,sharedEdit.endTime);
+ assert.equal(friendEdit.place,sharedEdit.place);
+ assert.equal(friendEdit.address,sharedEdit.address);
+ assert.deepEqual(friendEdit.transport,transport);
+ assert.equal(friendEdit.personalNote,'');
+ await api('friend','deleteItinerary',{id:record.id,revision:friendEdit.sharedRevision},409);
+ const {items:[ownerAfterFriend]}=await api('owner','listItinerary');
+ assert.equal(ownerAfterFriend.personalNote,details.personalNote);
+ assert.equal(ownerAfterFriend.canEdit,true);
+ await api('owner','deleteItinerary',{id:record.id,revision:ownerAfterFriend.revision});
  assert.deepEqual(await api('friend','listItinerary'),{items:[],notesVersion:2,timeRangeVersion:1,placeDetailsVersion:1,transportVersion:1});
 });

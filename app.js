@@ -303,20 +303,24 @@ function reorderItineraryDay(g,date,entries){
  };
  draw();
 }
+function loadItinerary(view){
+ return api('listItinerary',{groupId:view.book}).then(({items,notesVersion,timeRangeVersion,placeDetailsVersion,transportVersion})=>{
+  view.notesReady=notesVersion===2;
+  view.timeRangeReady=timeRangeVersion===1;
+  view.placeDetailsReady=placeDetailsVersion===1;
+  view.transportReady=transportVersion===1;
+  view.items=view.notesReady?items:items.map(item=>({...item,
+   sharedNote:item.privateNote?'':item.note,personalNote:item.privateNote?item.note:''
+  }));
+  return view;
+ });
+}
 function renderItinerary(g,c){
  const account=window.WarmCloud?.user()?.uid;
  if(itineraryView?.book!==g.id||itineraryView.account!==account){
   const view={book:g.id,account,items:null};
   itineraryView=view;
-  api('listItinerary',{groupId:g.id}).then(({items,notesVersion,timeRangeVersion,placeDetailsVersion,transportVersion})=>{
-   view.notesReady=notesVersion===2;
-   view.timeRangeReady=timeRangeVersion===1;
-   view.placeDetailsReady=placeDetailsVersion===1;
-   view.transportReady=transportVersion===1;
-   view.items=view.notesReady?items:items.map(item=>({...item,
-    sharedNote:item.privateNote?'':item.note,personalNote:item.privateNote?item.note:''
-   }));
-  }).catch(error=>{
+  loadItinerary(view).catch(error=>{
    view.error=error.message==='未知操作'?'行程功能等待後端更新。':error.message;
   }).finally(()=>{if(itineraryView===view&&tab==='itinerary'&&group()?.id===g.id)render()});
  }
@@ -358,7 +362,7 @@ function renderItinerary(g,c){
    return `<section class="itinerary-day"><div class="itinerary-day-header"><h3>第 ${dayNumber(date)} 天 <span>${esc(date)}</span></h3>
     ${notesReady&&entries.length>1?`<button type="button" class="quiet" data-itinerary-order="${esc(date)}" aria-label="調整第 ${dayNumber(date)} 天的順序">調整順序</button>`:''}</div>
    ${ordered.map((item,index)=>{
-    const editable=notesReady&&item.canEdit;
+    const editable=notesReady&&(item.canEdit||item.sharedRevision);
     const tag=editable?'button':'article';
     const previous=ordered[index-1];
     return `${itineraryLegMarkup(previous,item,previous?.id!==originalPrevious.get(item.id))}<${tag} class="itinerary-item${item.endTime?' has-time-range':''}"${editable?` type="button" data-itinerary="${esc(item.id)}" aria-label="編輯 ${esc(item.place)}"`:''}>
@@ -394,7 +398,7 @@ function renderItinerary(g,c){
   };
  });
  c.querySelectorAll('[data-itinerary]').forEach(button=>{
-  button.onclick=()=>editItinerary(g,items.find(item=>item.id===button.dataset.itinerary));
+  button.onclick=()=>editItinerary(g,items.find(item=>item.id===button.dataset.itinerary),button);
  });
  c.querySelectorAll('[data-itinerary-order]').forEach(button=>{
   button.onclick=()=>{
@@ -403,9 +407,14 @@ function renderItinerary(g,c){
   };
  });
 }
-function editItinerary(g,item){
+function editItinerary(g,item,trigger){
  if(!g||!itineraryView?.notesReady)return;
  const id=item?.id||uid();
+ const canEditPersonalNote=!item||item.canEdit;
+ const openedView=itineraryView;
+ const originalTop=trigger?.getBoundingClientRect().top;
+ const content=$('content');
+ const dayOffset=content.querySelector('.itinerary-days')?.scrollLeft;
  const {timeRangeReady,placeDetailsReady,transportReady}=itineraryView;
  const start=field('time','開始時間（選填）',item?.time||'','time');
  const timing=timeRangeReady?`<div class="itinerary-time-fields"><div>${start}</div><div>${
@@ -446,18 +455,13 @@ function editItinerary(g,item){
   field('place','地點名稱',item?.place||'','text','required maxlength="120" placeholder="例如：廣藏市場"')+
   placeDetails+transportDetails+
   `<label for="itinerarySharedNote">備註（所有成員可見）</label>
-  <textarea class="itinerary-note itinerary-note-fit" id="itinerarySharedNote" name="sharedNote" rows="1" maxlength="1000">${esc(item?.sharedNote||'')}</textarea>
+  <textarea class="itinerary-note itinerary-note-fit" id="itinerarySharedNote" name="sharedNote" rows="1" maxlength="1000">${esc(item?.sharedNote||'')}</textarea>`+
+  (canEditPersonalNote?`
   <label for="itineraryPersonalNote">🔒 備註（僅自己可見）</label>
-  <textarea class="itinerary-note itinerary-note-fit" id="itineraryPersonalNote" name="personalNote" rows="1" maxlength="1000">${esc(item?.personalNote||'')}</textarea>
-  <p class="hint">地點資訊與共用備註會顯示給此帳本的成員。</p>`+
-  (item?'<button type="button" id="deleteItinerary" class="quiet danger">刪除行程</button>':'');
- const reload=(date=itineraryDay)=>{
-  if(group()?.id!==g.id)return;
-  itineraryDay=date;
-  itineraryView=null;
-  render();
- };
- let transferMode='',copyId;
+  <textarea class="itinerary-note itinerary-note-fit" id="itineraryPersonalNote" name="personalNote" rows="1" maxlength="1000">${esc(item?.personalNote||'')}</textarea>`:'')+
+  '<p class="hint">地點資訊與共用備註會顯示給此帳本的成員。</p>'+
+  (item?.canEdit?'<button type="button" id="deleteItinerary" class="quiet danger">刪除行程</button>':'');
+ let transferMode='',copyId,saved;
  modal(item?'編輯行程':'新增行程',form,'儲存行程',async f=>{
   const place=f.get('place').trim();
   if(!place)throw Error('請填寫地點');
@@ -475,13 +479,43 @@ function editItinerary(g,item){
    if(option.method.length>240)throw Error('搭車的交通備註請縮短至 237 字以內');
   }
   const copying=transferMode==='copy';
-  await api('saveItinerary',{groupId:g.id,id:copying?(copyId||=uid()):id,revision:copying?'':item?.revision||'',date,time,place,
+  const savedId=copying?(copyId||=uid()):id;
+  const sharedOnly=!canEditPersonalNote&&!copying;
+  await api('saveItinerary',{groupId:g.id,id:savedId,revision:copying?'':item?.revision||item?.sharedRevision||'',date,time,place,
    ...(transportReady?{transport}:{}),
    ...(timeRangeReady?{endTime}:{}),
    ...(placeDetailsReady?{address:f.get('address').trim(),openingHours:f.get('openingHours').trim()}:{}),
-   sharedNote:f.get('sharedNote').trim(),personalNote:f.get('personalNote').trim()});
-  reload(date);
-  toast(copying?'行程已複製':transferMode==='move'?'行程已移動':'行程已儲存');
+   sharedNote:f.get('sharedNote').trim(),...(sharedOnly?{sharedOnly:true}:{personalNote:(f.get('personalNote')||'').trim()})});
+  const message=copying?'行程已複製':transferMode==='move'?'行程已移動':'行程已儲存';
+  try{
+   const view=await loadItinerary({book:g.id,account:openedView.account});
+   saved={view,id:savedId,date,stay:!copying&&item?.date===date};
+   toast(message);
+  }catch{
+   toast(message+'，請同步帳本查看最新內容');
+  }
+ },()=>{
+  $('modal').close();
+  const current=group();
+  if(!saved||tab!=='itinerary'||current?.id!==g.id||itineraryView!==openedView)return;
+  itineraryView=saved.view;
+  if(!saved.stay)itineraryDay=saved.date;
+  renderItinerary(current,content);
+  const days=content.querySelector('.itinerary-days');
+  if(saved.stay&&days&&dayOffset!==undefined)days.scrollLeft=dayOffset;
+  const card=[...content.querySelectorAll('[data-itinerary]')].find(button=>button.dataset.itinerary===saved.id);
+  if(!card)return;
+  requestAnimationFrame(()=>{
+   if(!card.isConnected||$('modal').open)return;
+   card.focus({preventScroll:true});
+   if(saved.stay&&originalTop!==undefined){
+    const header=document.querySelector('header');
+    const top=header&&getComputedStyle(header).position==='sticky'?header.getBoundingClientRect().bottom:0;
+    window.scrollBy(0,card.getBoundingClientRect().top-Math.max(originalTop,top+8));
+   }else{
+    card.scrollIntoView({block:'center'});
+   }
+  });
  });
  const fields=$('fields');
  const transferButtons=fields.querySelectorAll('[data-itinerary-transfer]');
@@ -525,10 +559,13 @@ function editItinerary(g,item){
    };
   });
  }
- if(item)$('deleteItinerary').onclick=()=>{
+ if(item?.canEdit)$('deleteItinerary').onclick=()=>{
   modal('刪除行程',`<p>確定刪除「${esc(item.place)}」？</p>`,'確認刪除',async()=>{
    await api('deleteItinerary',{groupId:g.id,id,revision:item.revision});
-   reload();
+   if(group()?.id===g.id&&tab==='itinerary'){
+    itineraryView=null;
+    render();
+   }
    toast('行程已刪除');
   });
  };
