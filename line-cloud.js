@@ -3,24 +3,45 @@ if(window.APP_CONFIG.lineApiBase){
  let user=null,needsRenewal=false;
  const initialize=()=>window.lineReady||(window.lineReady=liff.init({liffId:cfg.liffId}));
  const homeScreen=window.navigator?.standalone===true||window.matchMedia?.('(display-mode: standalone)').matches;
- const homeLogin=new URL(location.href).searchParams.get('homeLogin');
- let loginWindow;
+ const entry=new URL(location.href);
+ const homeLogin=entry.searchParams.get('homeLogin'),homeKey=entry.searchParams.get('homeKey');
+ const installed=homeScreen&&!homeLogin;
+ let loginWindow,homeKeys,homeSession,finishingHomeLogin;
+ function prepareHomeLogin(){
+  homeLoginTransfer.prepare().then(keys=>{homeKeys=keys}).catch(()=>{});
+ }
  function openHomeScreenLogin(renew=false){
-  if(loginWindow&&!loginWindow.closed){loginWindow.focus();return}
+  if(loginWindow&&!loginWindow.closed&&homeLoginTransfer.pending()){loginWindow.focus();return}
+  if(!homeKeys){prepareHomeLogin();throw Error('登入接續正在準備，請稍後再按一次「LINE 登入」。')}
   const url=new URL(location.href);
   url.search=renew?'?homeLogin=renew':'?homeLogin=start';
+  url.searchParams.set('homeKey',homeKeys.publicKey);
   url.hash='';
+  homeLoginTransfer.start(homeKeys);
   loginWindow=window.open(url.href,'_blank','popup');
   if(!loginWindow)throw Error('無法開啟 LINE 登入視窗，請允許彈出視窗後再試。');
+  homeKeys=null;
+  prepareHomeLogin();
+  updateOpenInLine();
  }
  window.addEventListener('message',event=>{
-  if(loginWindow&&event.source===loginWindow&&event.origin===new URL(location.href).origin&&event.data==='split-home-login-complete'){
-   loginWindow=null;
-   location.reload();
+  if(loginWindow&&event.source===loginWindow&&event.origin===entry.origin&&event.data?.type==='split-home-login'&&typeof event.data.code==='string'){
+   finishHomeLogin(event.data.code).catch(()=>{});
   }
  });
+ function finishHomeLogin(code){
+  if(finishingHomeLogin)return finishingHomeLogin;
+  finishingHomeLogin=(async()=>{
+   const raw=await homeLoginTransfer.unseal(code);
+   await announceHomeSession(raw);
+   loginWindow?.close();
+   loginWindow=null;
+  })().finally(()=>{finishingHomeLogin=null});
+  return finishingHomeLogin;
+ }
  function updateOpenInLine(){
   const hint=document.getElementById('openInLineHint');
+  document.getElementById('resumeHomeLogin').hidden=!installed||!!user||!homeLoginTransfer.pending();
   hint.hidden=!homeScreen||!!user;
   if(hint.hidden)return;
   const url=new URL('https://liff.line.me/'+cfg.liffId+'/');
@@ -32,24 +53,39 @@ if(window.APP_CONFIG.lineApiBase){
   window.dispatchEvent(new CustomEvent('warm-auth',{detail}));
  };
  function expired(){
+  if(installed)homeLoginTransfer.forget();
+  homeSession=null;
   user=null;needsRenewal=true;signal(null);
   document.getElementById('status').textContent='請重新登入';
   document.getElementById('login').textContent='重新登入 LINE';
   return Object.assign(Error('LINE 登入需要更新，請按「重新登入 LINE」。'),{code:'line-auth',status:401});
  }
  function token(){
+  if(homeSession){
+   if(homeSession.exp*1000<=Date.now()+15000)throw expired();
+   return homeSession.raw;
+  }
   const raw=liff.getIDToken();
   const decoded=liff.getDecodedIDToken?.();
   if(!raw||(decoded?.exp&&decoded.exp*1000<=Date.now()+15000))throw expired();
   return raw;
  }
- async function request(action,data={}){
-  const idToken=token();
+ async function request(action,data={},idToken=token()){
   const r=await fetch(cfg.lineApiBase,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+idToken},body:JSON.stringify({action,...data})});
   if(r.status===401)throw expired();
   let result;try{result=await r.json()}catch{throw Error('伺服器回應異常，請稍後再試')}
   if(!r.ok)throw Object.assign(Error(result.error||'雲端操作失敗'),{status:r.status});
   return result;
+ }
+ async function announceHomeSession(raw){
+  const profile=homeLoginTransfer.claims(raw);
+  if(profile.exp*1000<=Date.now()+15000)throw expired();
+  await request('list',{},raw);
+  homeLoginTransfer.remember(raw);
+  homeSession={raw,exp:profile.exp};
+  user={uid:profile.sub,displayName:profile.name||'已登入',pictureUrl:profile.picture||''};
+  needsRenewal=false;
+  signal({uid:user.uid,name:user.displayName});
  }
  async function announce(){
   await request('list');
@@ -58,7 +94,7 @@ if(window.APP_CONFIG.lineApiBase){
   signal({uid:user.uid,name:user.displayName});
  }
  async function reconnect(){
-  if(homeScreen&&!homeLogin)return openHomeScreenLogin(true);
+  if(installed)return openHomeScreenLogin(true);
   await initialize();
   user=null;signal(null);
   if(liff.isInClient()){
@@ -77,23 +113,34 @@ if(window.APP_CONFIG.lineApiBase){
  window.WarmCloud={
   user:()=>user,
   login:async()=>{
-   if(homeScreen&&!homeLogin&&!user)return openHomeScreenLogin(needsRenewal);
+   if(installed&&!user)return openHomeScreenLogin(needsRenewal);
    await initialize();
    if(needsRenewal)return reconnect();
    if(!liff.isLoggedIn()){if(liff.isInClient())return reconnect();liff.login({redirectUri:location.href});return}
    await announce();
   },
   reconnect,
-  logout:async()=>{user=null;signal(null);if(!liff.isInClient()){liff.logout();location.reload()}else{document.getElementById('status').textContent='已登出此頁面'}},
+  logout:async()=>{
+   if(installed)homeLoginTransfer.forget();
+   homeSession=null;user=null;signal(null);
+   if(!liff.isInClient()){if(liff.isLoggedIn())liff.logout();location.reload()}
+   else document.getElementById('status').textContent='已登出此頁面';
+  },
   api:request
  };
  document.getElementById('cloudLogin').hidden=true;
+ if(installed)prepareHomeLogin();
+ document.getElementById('resumeHomeLogin').onclick=()=>modal('完成主畫面登入',
+  '<p>貼上剛在 Safari 複製的登入接續碼。</p><label for="homeLoginCode">登入接續碼</label><textarea id="homeLoginCode" name="homeLoginCode" class="itinerary-note" rows="2" required></textarea>',
+  '完成登入',form=>finishHomeLogin(form.get('homeLoginCode')));
  updateOpenInLine();
  window.addEventListener('load',async()=>{
   try{
    await initialize();
    if(!location.hash)try{const pending=sessionStorage.getItem('split-pending-invite');if(pending?.startsWith('#join=')){history.replaceState(null,'',location.pathname+location.search+pending);sessionStorage.removeItem('split-pending-invite')}}catch{}
    updateOpenInLine();
+   const saved=installed?homeLoginTransfer.read():null;
+   if(saved){await announceHomeSession(saved);return}
    if((homeLogin==='start'||homeLogin==='renew')&&!liff.isInClient()){
     if(homeLogin==='renew'&&liff.isLoggedIn())liff.logout();
     if(!liff.isLoggedIn()){
@@ -105,9 +152,16 @@ if(window.APP_CONFIG.lineApiBase){
    }
    if(liff.isLoggedIn()){
     await announce();
-    if(homeLogin&&window.opener){
-     window.opener.postMessage('split-home-login-complete',new URL(location.href).origin);
-     window.close();
+    if(homeLogin&&homeKey){
+     const code=await homeLoginTransfer.seal(homeKey,token());
+     window.opener?.postMessage({type:'split-home-login',code},entry.origin);
+     modal('接續主畫面登入',
+      '<p>LINE 授權已完成。複製接續碼後，回 iPhone 主畫面點「分帳」，再點「完成主畫面登入」。</p>'+
+      `<label for="homeLoginCopy">登入接續碼</label><textarea id="homeLoginCopy" class="itinerary-note" rows="2" readonly>${code}</textarea>`,
+      '複製接續碼',async()=>{
+       await navigator.clipboard.writeText(code);
+       toast('已複製，請回主畫面的分帳完成登入');
+      });
     }
    }
   }catch(e){
