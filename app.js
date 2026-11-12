@@ -246,6 +246,56 @@ function koreanSubwayRoute(method){
 }
 const transportModes=[['transit','地鐵／步行'],['car','搭車']];
 const isCarTransport=option=>/計程車|計程|開車|自駕|機場接送|包車|搭車|taxi|uber/i.test(option?.method||'');
+// Totals use one default option per leg; alternative fares are never added together.
+function itineraryModeOption(item,mode){
+ const options=item.transport||[];
+ if(options.length>=2){
+  const [a,b]=options;
+  return isCarTransport(a)&&!isCarTransport(b)?(mode==='car'?a:b):(mode==='car'?b:a);
+ }
+ return options.find(option=>isCarTransport(option)===(mode==='car'));
+}
+function itineraryMinutes(value){
+ const text=String(value||'').replace(/\d{1,2}:\d{2}/g,'');
+ const waiting=text.match(/含候車[^\d]*(\d+)\s*分/);
+ if(waiting)return Number(waiting[1]);
+ const match=text.match(/(?:(\d+(?:\.\d+)?)\s*(?:小時|時)\s*)?(\d+(?:\.\d+)?)(?:\s*[–—~～-]\s*(\d+))?\s*分(?:鐘)?/);
+ if(match)return Number(match[1]||0)*60+Number(match[3]||match[2]);
+ const hours=text.match(/(\d+(?:\.\d+)?)\s*(?:小時|時)/);
+ return hours?Math.round(Number(hours[1])*60):null;
+}
+function itineraryWon(value){
+ const text=String(value||'');
+ if(/依.*訂單|待確認|未定/.test(text))return null;
+ const match=text.match(/₩\s*([\d,]+)/);
+ if(!match)return /免費/.test(text)?0:null;
+ const toll=text.match(/[＋+]\s*(?:通行費|過路費)\s*₩?\s*([\d,]+)/);
+ return Number(match[1].replace(/,/g,''))+(toll?Number(toll[1].replace(/,/g,'')):0);
+}
+function itineraryTransportTotal(dayEntries,mode){
+ let minutes=0,cost=0,missing=0,count=0,approx=false;
+ for(const entries of dayEntries){
+  const stops=entries.filter(item=>!/彈性備選|有空再去/.test(item.place||''));
+  stops.forEach((item,index)=>{
+   const option=itineraryModeOption(item,mode);
+   if(/航班|機票/.test((item.place||'')+' '+(option?.method||'')+' '+(option?.duration||'')))return;
+   if(!index&&!option)return;
+   count++;
+   if(!option){missing++;return;}
+   const m=itineraryMinutes(option.duration),c=itineraryWon(option.cost);
+   if(m===null||c===null){missing++;return;}
+   minutes+=m;cost+=c;
+   if(/估|即時|深夜|未含|比較|約|[–~～]/.test(option.duration+' '+option.cost+' '+option.method))approx=true;
+  });
+ }
+ return {minutes,cost,missing,count,approx};
+}
+function itineraryTotalLabel(total,mode){
+ if(!total.count)return '無交通資料';
+ const h=Math.floor(total.minutes/60),m=total.minutes%60;
+ const time=(h?`${h}小時`:'')+(m||!h?`${m}分`:'');
+ return `${total.missing?'已知小計':'共'}${time} - ₩${total.cost.toLocaleString('en-US')}／${mode==='car'?'車':'人'}${total.missing?`（${total.missing}段待補）`:''}${total.approx?'*':''}`;
+}
 function itineraryPlaceNames(place){
  const match=place.match(/^(.+?)\s*[（(]([^（）()]*[가-힣][^（）()]*)[）)]\s*$/u);
  return match?[match[1],match[2]]:[place,''];
@@ -294,10 +344,11 @@ function editItineraryMap(g,item){
 function itineraryLegMarkup(previous,item,routeChanged){
  const options=item.transport||[];
  if(!previous&&!options.length)return '';
- const matches=options.filter(option=>isCarTransport(option)===(itineraryTransportMode==='car'));
+ const selected=itineraryModeOption(item,itineraryTransportMode);
+ const matches=selected?[selected]:[];
  const placeName=stop=>esc(itineraryPlaceNames(stop.place)[0]);
  const endpoints=`${previous?`${placeName(previous)} → `:'前往 '}${placeName(item)}`;
- const routes=(matches.length?matches:options).map(option=>{
+ const routes=matches.map(option=>{
   const {method,duration,cost}=option;
   const korean=koreanSubwayRoute(method);
   const mode=isCarTransport(option)?'搭車':/地鐵|\d+\s*號線/.test(method)?'地鐵':/步行|走路/.test(method)?'步行':'';
@@ -492,8 +543,8 @@ function renderItinerary(g,c){
   aria-pressed="${date===itineraryDay}">${date?`第 ${dayNumber(date)} 天 <small>${esc(shortDate(date))}</small>`:'總覽'}</button>`);
  const visibleDays=itineraryDay?[[itineraryDay,days.get(itineraryDay)]]:[...days];
  const transportPicker=items.some(item=>item.transport?.length)?`<div class="itinerary-transport-modes" role="group" aria-label="交通方式">
-  ${transportModes.map(([mode,label])=>`<button type="button" class="quiet" data-transport-mode="${mode}" aria-pressed="${mode===itineraryTransportMode}">${label}</button>`).join('')}
- </div>`:'';
+  ${transportModes.map(([mode,label])=>`<button type="button" class="quiet" data-transport-mode="${mode}" aria-pressed="${mode===itineraryTransportMode}">${label} <span>${esc(itineraryTotalLabel(itineraryTransportTotal(visibleDays.map(([date,entries])=>orderedItineraryDay(entries,g.itineraryOrder?.[date])),mode),mode))}</span></button>`).join('')}
+ </div><p class="hint">交通合計不含景點停留；每段採一個預設方案。地鐵按成人每人、搭車按每車計價；備選不計入。*估價或加成未含，依各段說明。</p>`:'';
  c.innerHTML=notice+`<div class="itinerary-days" role="group" aria-label="行程日期">${options.join('')}</div>`+transportPicker+
   visibleDays.map(([date,entries])=>{
    const ordered=orderedItineraryDay(entries,g.itineraryOrder?.[date]);
