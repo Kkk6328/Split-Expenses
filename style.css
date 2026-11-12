@@ -384,3 +384,7 @@ dialog:modal{
 .itinerary-transport-editor-header .itinerary-transport-modes { margin: 0; gap: 4px; }
 .itinerary-transport-editor-header button { min-height: 36px; padding: 4px 7px; font-size: 12px; white-space: nowrap; }
 .itinerary-transit-korean { margin-top: 4px; font-weight: 600; }
+
+.itinerary-transport-modes { flex-wrap: wrap; }
+.itinerary-transport-modes [data-transport-mode] { white-space: normal; text-align: left; }
+.itinerary-transport-modes [data-transport-mode] span { display: block; line-height: 1.6; }
