@@ -42,10 +42,10 @@ if(window.APP_CONFIG.lineApiBase){
   return finishingHomeLogin;
  }
  let checkingRelay=false;
- async function fetchWithDeadline(options){
+ async function fetchWithDeadline(options, consume){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),8000);
-  try{return await fetch(cfg.lineApiBase,{...options,signal:controller.signal})}
+  try{return await consume(await fetch(cfg.lineApiBase,{...options,signal:controller.signal}))}
   finally{clearTimeout(timer)}
  }
  async function resumeHomeLogin(){
@@ -55,9 +55,8 @@ if(window.APP_CONFIG.lineApiBase){
   checkingRelay=true;
   try{
    const response=await fetchWithDeadline({method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'readHomeLoginRelay',secret})});
-   if(!response.ok)return;
-   const {code}=await response.json();
+    body:JSON.stringify({action:'readHomeLoginRelay',secret})},result=>result.ok?result.json():{});
+   const {code}=response;
    if(code&&secret===homeLoginTransfer.relaySecret()&&!user)await finishHomeLogin(code);
   }catch{
    // A later foreground check can retry after a connection failure.
@@ -95,11 +94,15 @@ if(window.APP_CONFIG.lineApiBase){
   return raw;
  }
  async function request(action,data={},idToken=token()){
-  const r=await fetch(cfg.lineApiBase,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+idToken},body:JSON.stringify({action,...data})});
-  if(r.status===401)throw expired();
-  let result;try{result=await r.json()}catch{throw Error('伺服器回應異常，請稍後再試')}
-  if(!r.ok)throw Object.assign(Error(result.error||'雲端操作失敗'),{status:r.status});
-  return result;
+  const options={method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+idToken},body:JSON.stringify({action,...data})};
+  async function read(r){
+   if(r.status===401)throw expired();
+   let result;try{result=await r.json()}catch{throw Error('伺服器回應異常，請稍後再試')}
+   if(!r.ok)throw Object.assign(Error(result.error||'雲端操作失敗'),{status:r.status});
+   return result;
+  }
+  if(action==='startHomeSession'||action==='getHomeSession')return fetchWithDeadline(options,read);
+  return read(await fetch(cfg.lineApiBase,options));
  }
  async function announceHomeSession(raw){
   let profile;
