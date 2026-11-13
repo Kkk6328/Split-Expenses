@@ -58,7 +58,7 @@ if(window.APP_CONFIG.lineApiBase){
  }
  function updateOpenInLine(){
   const hint=document.getElementById('openInLineHint');
-  document.getElementById('resumeHomeLogin').hidden=!installed||!!user;
+  document.getElementById('resumeHomeLogin').hidden=!installed||!!user||!homeLoginTransfer.pending();
   hint.hidden=!homeScreen||!!user;
   if(hint.hidden)return;
   const url=new URL('https://liff.line.me/'+cfg.liffId+'/');
@@ -194,7 +194,7 @@ if(window.APP_CONFIG.lineApiBase){
      if(relay){
       try{
        await request('publishHomeLoginRelay',{relay,code});
-       modal('LINE 授權完成','<p>請回到 iPhone 主畫面，點「分帳」繼續。</p>','完成',async()=>{});
+       modal('LINE 授權完成','<p>請回到剛才開啟的「分帳」。回去後會自動登入。</p>','完成',async()=>{});
        return;
       }catch(e){if(e.code==='line-auth')throw e}
      }

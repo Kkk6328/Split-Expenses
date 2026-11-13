@@ -4,6 +4,12 @@
  const version = page => Array.from(page.querySelectorAll('script[src],link[rel="stylesheet"]'),
   element => element.getAttribute('src') || element.getAttribute('href')).join('|');
  const current = version(document);
+ const initial = new URL(location.href);
+ const justUpdated = initial.searchParams.has('_update');
+ if (justUpdated) {
+  initial.searchParams.delete('_update');
+  history.replaceState(history.state, '', initial.href);
+ }
  let lastCheck = 0;
  let checking = false;
 
@@ -20,13 +26,21 @@
    const page = new DOMParser().parseFromString(await response.text(), 'text/html');
    if (!page.querySelector('script[src^="standalone-update.js"]') || version(page) === current) return;
 
+   const next = new URL(location.href);
+   if (!document.querySelector('dialog[open]') &&
+       !homeLoginTransfer.pending() &&
+       !justUpdated) {
+    next.searchParams.set('_update', String(Date.now()));
+    location.replace(next.href);
+    return;
+   }
    const button = document.createElement('button');
    button.id = 'standaloneUpdate';
    button.type = 'button';
    button.textContent = '載入新版';
    button.onclick = () => {
-    if (document.querySelector('dialog[open]')) {
-     toast('請先完成目前的編輯，再載入新版。');
+    if (document.querySelector('dialog[open]') || homeLoginTransfer.pending()) {
+     toast('請先完成目前的登入或編輯，再載入新版。');
      return;
     }
     const next = new URL(location.href);
