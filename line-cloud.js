@@ -42,12 +42,19 @@ if(window.APP_CONFIG.lineApiBase){
   return finishingHomeLogin;
  }
  let checkingRelay=false;
+ async function fetchWithDeadline(options){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),8000);
+  try{return await fetch(cfg.lineApiBase,{...options,signal:controller.signal})}
+  finally{clearTimeout(timer)}
+ }
  async function resumeHomeLogin(){
   const secret=homeLoginTransfer.relaySecret();
   if(!installed||user||document.hidden||checkingRelay||!secret)return;
+  document.getElementById('status').textContent='正在接續 LINE 登入…';
   checkingRelay=true;
   try{
-   const response=await fetch(cfg.lineApiBase,{method:'POST',headers:{'Content-Type':'application/json'},
+   const response=await fetchWithDeadline({method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({action:'readHomeLoginRelay',secret})});
    if(!response.ok)return;
    const {code}=await response.json();
@@ -163,7 +170,8 @@ if(window.APP_CONFIG.lineApiBase){
  if(installed){
   setInterval(resumeHomeLogin,3000);
   window.addEventListener('focus',resumeHomeLogin);
-  window.addEventListener('pageshow',resumeHomeLogin);
+  window.addEventListener('pageshow',()=>{if(!user)resumeHomeLogin()});
+
   window.addEventListener('focus',updateOpenInLine);
   window.addEventListener('pageshow',updateOpenInLine);
   document.addEventListener('visibilitychange',()=>{

@@ -39,8 +39,8 @@
    button.type = 'button';
    button.textContent = '載入新版';
    button.onclick = () => {
-    if (document.querySelector('dialog[open]') || homeLoginTransfer.pending()) {
-     toast('請先完成目前的登入或編輯，再載入新版。');
+    if (document.querySelector('dialog[open]')) {
+     toast('請先關閉目前的視窗，再載入新版。');
      return;
     }
     const next = new URL(location.href);
