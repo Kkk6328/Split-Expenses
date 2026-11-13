@@ -118,7 +118,7 @@ async function itinerary(db, bookId, user, body){
  fail('行程已變更或無權限，請重新載入',409);
 }
 const noteMediaTable = 'CREATE TABLE IF NOT EXISTS book_media(book_id TEXT NOT NULL,kind TEXT NOT NULL,target_id TEXT NOT NULL,data TEXT NOT NULL,revision TEXT NOT NULL,PRIMARY KEY(book_id,kind,target_id))';
-const validNotePhoto = image => typeof image === 'string' && image.length <= 54000 &&
+const validNotePhoto = image => typeof image === 'string' && image.length <= 240000 &&
  /^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(image);
 
 async function saveBook(db, old, group, version, separateNoteImages) {
@@ -175,7 +175,7 @@ async function sessionHash(token) {
  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2,'0')).join('');
 }
 function payload(g){const {canDelete,owner,access,joinToken,...rest}=g;return rest}
-export default {async fetch(req,env){const headers={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Content-Type':'application/json','Cache-Control':'no-store'};const reply=(o,status=200)=>new Response(JSON.stringify(o),{status,headers});if(req.method==='OPTIONS')return new Response(null,{status:204,headers});if(req.method!=='POST')return reply({error:'Method not allowed'},405);try{if(req.headers.get('Origin')&&req.headers.get('Origin')!==env.APP_ORIGIN)fail('來源不允許',403);const raw=await req.text();if(raw.length>750000)fail('資料過大',413);const b=JSON.parse(raw);const token=req.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>10000)fail('請登入 LINE',401);const db=env.DB, now=Date.now();
+export default {async fetch(req,env){const headers={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Content-Type':'application/json','Cache-Control':'no-store'};const reply=(o,status=200)=>new Response(JSON.stringify(o),{status,headers});if(req.method==='OPTIONS')return new Response(null,{status:204,headers});if(req.method!=='POST')return reply({error:'Method not allowed'},405);try{if(req.headers.get('Origin')&&req.headers.get('Origin')!==env.APP_ORIGIN)fail('來源不允許',403);const raw=await req.text();if(raw.length>1250000)fail('資料過大',413);const b=JSON.parse(raw);if(raw.length>750000&&!(b.action==='save'&&b.separateNoteImages===true))fail('資料過大',413);const token=req.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>10000)fail('請登入 LINE',401);const db=env.DB, now=Date.now();
 let v, session, hash;
 if (/^SH1\.[a-f0-9]{64}$/.test(token)) {
  hash=await sessionHash(token);
@@ -215,7 +215,7 @@ if(['listItinerary','saveItinerary','deleteItinerary'].includes(b.action)){
  if(JSON.parse(book.data).deletedAt)fail('帳本已刪除',403);
  return reply(await itinerary(db,book.id,user,b));
 }
-if(b.action==='capabilities')return reply({membershipVersion:3,mediaVersion:1,paymentVersion:2,noteImageVersion:1});
+if(b.action==='capabilities')return reply({membershipVersion:3,mediaVersion:1,paymentVersion:2,noteImageVersion:1,notePhotoVersion:1});
 if(['getExpenseImages','saveExpenseImages','getPayment','savePayment'].includes(b.action)){
  const r=await load(b.groupId),g=JSON.parse(r.data);if(g.deletedAt)fail('帳本已刪除',403);
  const payment=b.action.endsWith('Payment'),writing=b.action.startsWith('save');
