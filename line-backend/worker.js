@@ -167,8 +167,49 @@ async function saveBook(db, old, group, version, separateNoteImages) {
  const results = await db.batch([...statements, update]);
  return results.at(-1);
 }
+const sessionDay = 86400000;
+const sessionIdle = 30 * sessionDay;
+const sessionAbsolute = 90 * sessionDay;
+async function sessionHash(token) {
+ const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+ return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2,'0')).join('');
+}
 function payload(g){const {canDelete,owner,access,joinToken,...rest}=g;return rest}
-export default {async fetch(req,env){const headers={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Content-Type':'application/json','Cache-Control':'no-store'};const reply=(o,status=200)=>new Response(JSON.stringify(o),{status,headers});if(req.method==='OPTIONS')return new Response(null,{status:204,headers});if(req.method!=='POST')return reply({error:'Method not allowed'},405);try{if(req.headers.get('Origin')&&req.headers.get('Origin')!==env.APP_ORIGIN)fail('來源不允許',403);const raw=await req.text();if(raw.length>750000)fail('資料過大',413);const b=JSON.parse(raw);const token=req.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>10000)fail('請登入 LINE',401);const verification=await fetch('https://api.line.me/oauth2/v2.1/verify',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id_token:token,client_id:env.LINE_CHANNEL_ID})});const v=await verification.json();if(!verification.ok||!v.sub)fail('LINE 登入已過期，請重新登入',401);const user=v.sub,db=env.DB;const output=r=>({...JSON.parse(r.data),version:r.version,cloud:true,canDelete:r.owner===user});const load=async id=>{if(!validId(id))fail('帳本編號無效');const r=await db.prepare('SELECT b.* FROM books b JOIN memberships m ON m.book_id=b.id WHERE b.id=? AND m.user_id=?').bind(id,user).first();if(!r)fail('無權存取帳本',403);return r};
+export default {async fetch(req,env){const headers={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Content-Type':'application/json','Cache-Control':'no-store'};const reply=(o,status=200)=>new Response(JSON.stringify(o),{status,headers});if(req.method==='OPTIONS')return new Response(null,{status:204,headers});if(req.method!=='POST')return reply({error:'Method not allowed'},405);try{if(req.headers.get('Origin')&&req.headers.get('Origin')!==env.APP_ORIGIN)fail('來源不允許',403);const raw=await req.text();if(raw.length>750000)fail('資料過大',413);const b=JSON.parse(raw);const token=req.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>10000)fail('請登入 LINE',401);const db=env.DB, now=Date.now();
+let v, session, hash;
+if (/^SH1\.[a-f0-9]{64}$/.test(token)) {
+ hash=await sessionHash(token);
+ session=await db.prepare('SELECT * FROM home_sessions WHERE hash=? AND expires>?').bind(hash,now).first();
+ if(!session)fail('分帳登入已過期，請重新登入',401);
+ v=JSON.parse(session.profile);
+ if(b.action==='endHomeSession'){
+  await db.prepare('DELETE FROM home_sessions WHERE hash=?').bind(hash).run();
+  return reply({ok:true});
+ }
+ const expires=Math.min(session.created+sessionAbsolute,now+sessionIdle);
+ if(expires-session.expires>=sessionDay){
+  await db.prepare('UPDATE home_sessions SET expires=MAX(expires,?) WHERE hash=?').bind(expires,hash).run();
+ }
+} else {
+ const verification=await fetch('https://api.line.me/oauth2/v2.1/verify',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id_token:token,client_id:env.LINE_CHANNEL_ID})});v=await verification.json();if(!verification.ok||!v.sub)fail('LINE 登入已過期，請重新登入',401);
+}
+if(b.action==='startHomeSession'){
+ if(session)fail('請先完成 LINE 驗證',400);
+ await db.prepare('CREATE TABLE IF NOT EXISTS home_sessions(hash TEXT PRIMARY KEY,profile TEXT NOT NULL,created INTEGER NOT NULL,expires INTEGER NOT NULL)').run();
+ const raw='SH1.'+Array.from(crypto.getRandomValues(new Uint8Array(32)), byte=>byte.toString(16).padStart(2,'0')).join('');
+ const profile={sub:v.sub,name:v.name,picture:v.picture};
+ await db.batch([
+  db.prepare('DELETE FROM home_sessions WHERE expires<=?').bind(now),
+  db.prepare('INSERT INTO home_sessions(hash,profile,created,expires) VALUES(?,?,?,?)').bind(await sessionHash(raw),JSON.stringify(profile),now,now+sessionIdle)
+ ]);
+ return reply({session:raw,profile});
+}
+if(b.action==='getHomeSession'){
+ if(!session)fail('請使用主畫面登入',400);
+ return reply({profile:v});
+}
+const user=v.sub;
+const output=r=>({...JSON.parse(r.data),version:r.version,cloud:true,canDelete:r.owner===user});const load=async id=>{if(!validId(id))fail('帳本編號無效');const r=await db.prepare('SELECT b.* FROM books b JOIN memberships m ON m.book_id=b.id WHERE b.id=? AND m.user_id=?').bind(id,user).first();if(!r)fail('無權存取帳本',403);return r};
 if(['listItinerary','saveItinerary','deleteItinerary'].includes(b.action)){
  const book=await load(b.groupId);
  if(JSON.parse(book.data).deletedAt)fail('帳本已刪除',403);

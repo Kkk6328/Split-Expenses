@@ -63,7 +63,7 @@ if(window.APP_CONFIG.lineApiBase){
  }
  function token(){
   if(homeSession){
-   if(homeSession.exp*1000<=Date.now()+15000)throw expired();
+   if(homeSession.exp&&homeSession.exp*1000<=Date.now()+15000)throw expired();
    return homeSession.raw;
   }
   const raw=liff.getIDToken();
@@ -79,11 +79,18 @@ if(window.APP_CONFIG.lineApiBase){
   return result;
  }
  async function announceHomeSession(raw){
-  const profile=homeLoginTransfer.claims(raw);
-  if(profile.exp*1000<=Date.now()+15000)throw expired();
-  await request('list',{},raw);
+  let profile;
+  if(raw.startsWith('SH1.')){
+   ({profile}=await request('getHomeSession',{},raw));
+  }else{
+   const claims=homeLoginTransfer.claims(raw);
+   if(claims.exp*1000<=Date.now()+15000)throw expired();
+   const result=await request('startHomeSession',{},raw);
+   raw=result.session;
+   profile=result.profile;
+  }
   homeLoginTransfer.remember(raw);
-  homeSession={raw,exp:profile.exp};
+  homeSession={raw};
   user={uid:profile.sub,displayName:profile.name||'已登入',pictureUrl:profile.picture||''};
   needsRenewal=false;
   signal({uid:user.uid,name:user.displayName});
@@ -122,8 +129,10 @@ if(window.APP_CONFIG.lineApiBase){
   },
   reconnect,
   logout:async()=>{
+   if(homeSession?.raw.startsWith('SH1.'))await request('endHomeSession');
    if(installed)homeLoginTransfer.forget();
    homeSession=null;user=null;signal(null);
+   if(installed){location.reload();return}
    if(!liff.isInClient()){if(liff.isLoggedIn())liff.logout();location.reload()}
    else document.getElementById('status').textContent='已登出此頁面';
   },
@@ -144,11 +153,11 @@ if(window.APP_CONFIG.lineApiBase){
  }
  window.addEventListener('load',async()=>{
   try{
-   await initialize();
    if(!location.hash)try{const pending=sessionStorage.getItem('split-pending-invite');if(pending?.startsWith('#join=')){history.replaceState(null,'',location.pathname+location.search+pending);sessionStorage.removeItem('split-pending-invite')}}catch{}
    updateOpenInLine();
    const saved=installed?homeLoginTransfer.read():null;
    if(saved){await announceHomeSession(saved);return}
+   await initialize();
    if((homeLogin==='start'||homeLogin==='renew')&&!liff.isInClient()){
     if(homeLogin==='renew'&&liff.isLoggedIn())liff.logout();
     if(!liff.isLoggedIn()){
