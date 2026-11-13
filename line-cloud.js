@@ -18,6 +18,7 @@ if(window.APP_CONFIG.lineApiBase){
   url.searchParams.set('homeKey',homeKeys.publicKey);
   url.hash='';
   homeLoginTransfer.start(homeKeys);
+  updateOpenInLine();
   loginWindow=window.open(url.href,'_blank','popup');
   if(!loginWindow)throw Error('無法開啟 LINE 登入視窗，請允許彈出視窗後再試。');
   homeKeys=null;
@@ -134,6 +135,13 @@ if(window.APP_CONFIG.lineApiBase){
   '<p>貼上剛在 Safari 複製的登入接續碼。</p><label for="homeLoginCode">登入接續碼</label><textarea id="homeLoginCode" name="homeLoginCode" class="itinerary-note" rows="2" required></textarea>',
   '完成登入',form=>finishHomeLogin(form.get('homeLoginCode')));
  updateOpenInLine();
+ if(installed){
+  window.addEventListener('focus',updateOpenInLine);
+  window.addEventListener('pageshow',updateOpenInLine);
+  document.addEventListener('visibilitychange',()=>{
+   if(!document.hidden)updateOpenInLine();
+  });
+ }
  window.addEventListener('load',async()=>{
   try{
    await initialize();
