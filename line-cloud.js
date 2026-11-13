@@ -210,7 +210,7 @@ if(window.APP_CONFIG.lineApiBase){
      if(relay){
       try{
        await request('publishHomeLoginRelay',{relay,code});
-       modal('LINE 授權完成','<p>請回到剛才開啟的「分帳」。回去後會自動登入。</p>','完成',async()=>{});
+       modal('LINE 授權完成','<p>請從 iPhone 的 App 切換器把「分帳」往上滑關掉，再點主畫面的「分帳」圖示重新開啟，就會自動登入。</p>','完成',async()=>{});
        return;
       }catch(e){if(e.code==='line-auth')throw e}
      }
