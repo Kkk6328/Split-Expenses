@@ -9,8 +9,8 @@ async function compressPhoto(file,maxLength=220000){
  const url=URL.createObjectURL(file),img=new Image();
  try{await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(Error('無法讀取圖片，請改用 JPG 或 PNG'));img.src=url});
   let size=maxLength<220000?1100:1600;
-  for(let step=0;step<5;step++){const scale=Math.min(1,size/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);const data=canvas.toDataURL('image/jpeg',0.85);if(data.length<=maxLength)return data;size=Math.round(size*.75)}
-  throw Error('圖片壓縮後仍過大，請裁切後再試');
+  for(let step=0;step<10;step++){const scale=Math.min(1,size/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);const data=canvas.toDataURL('image/jpeg',Math.max(0.55,0.85-step*0.04));if(data.length<=maxLength)return data;size=Math.round(size*.75)}
+  throw Error('無法將整張圖片壓縮到可上傳大小，請另存較低解析度的 JPG 再試');
  }finally{URL.revokeObjectURL(url)}
 }
 
