@@ -204,7 +204,44 @@ function showBalanceDetails(memberId){
 function plan(g){const b=balances(g),deb=g.members.filter(m=>b[m.id]<0).map(m=>({...m,left:-b[m.id]})),cre=g.members.filter(m=>b[m.id]>0).map(m=>({...m,left:b[m.id]}));let out=[],i=0,j=0;while(i<deb.length&&j<cre.length){const amount=Math.min(deb[i].left,cre[j].left);out.push({from:deb[i].id,to:cre[j].id,amount});deb[i].left-=amount;cre[j].left-=amount;if(!deb[i].left)i++;if(!cre[j].left)j++}return out}
 const name=(g,id)=>g.members.find(m=>m.id===id)?.name||'未知成員';
 let itineraryTransportMode='transit';
-const bookTabs={notes:'記事',itinerary:'行程',balances:'分帳結算',expenses:'花費明細',members:'成員'};
+const travelPhraseGroups=[
+ {id:'taxi',title:'搭車',icon:'🚕',items:[
+  {zh:'請給我收據。',ko:'영수증 주세요.'},
+  {zh:'我是台灣人。',ko:'저는 대만 사람이에요.'}
+ ]},
+ {id:'dining',title:'吃飯',icon:'🍽️',items:[
+  {zh:'我們有五個大人、一個小孩。',ko:'저희는 어른 다섯 명과 아이 한 명이에요.'},
+  {zh:'我們不吃牛肉。',ko:'저희는 소고기를 먹지 않아요.'}
+ ]},
+ {id:'shopping',title:'買東西',icon:'🛍️',items:[
+  {zh:'請問這個多少錢？',ko:'이거 얼마예요?'},
+  {zh:'請問這在哪裡？',ko:'이거 어디에 있어요?'},
+  {zh:'請問其他間店有貨嗎？',ko:'다른 매장에는 재고가 있나요?'},
+  {zh:'請問有別的款式嗎？',ko:'다른 디자인도 있나요?'},
+  {zh:'請問可以算便宜一點嗎？',ko:'조금 깎아 주실 수 있나요?'}
+ ]}
+];
+let travelPhraseCategory='taxi';
+function showTravelPhrase(phrase,opener){
+ const previous=document.getElementById('travelPhraseDialog');
+ if(previous)previous.remove();
+ const dialog=document.createElement('dialog');
+ dialog.id='travelPhraseDialog';dialog.className='travel-phrase-dialog';
+ dialog.setAttribute('aria-labelledby','travelPhraseTitle');
+ dialog.innerHTML=`<div class="dialog-head"><h2 id="travelPhraseTitle">給對方看</h2><button type="button" class="quiet" aria-label="關閉常用語">✕</button></div><p class="travel-phrase-large" lang="ko">${esc(phrase.ko)}</p><p class="travel-phrase-translation">${esc(phrase.zh)}</p>`;
+ document.body.append(dialog);
+ dialog.querySelector('button').onclick=()=>dialog.close();
+ dialog.addEventListener('close',()=>{dialog.remove();if(opener?.isConnected)opener.focus()},{once:true});
+ dialog.showModal();
+}
+function renderTravelPhrases(container){
+ const selected=travelPhraseGroups.find(category=>category.id===travelPhraseCategory)||travelPhraseGroups[0];
+ container.innerHTML=`<section class="travel-phrases" aria-label="韓國旅遊常用語"><div class="travel-phrase-categories" aria-label="常用語分類">${travelPhraseGroups.map(category=>`<button type="button" class="quiet" data-phrase-category="${category.id}" aria-pressed="${category.id===selected.id}">${category.icon} ${category.title}</button>`).join('')}</div><h3>${selected.icon} ${selected.title}</h3><div class="travel-phrase-list">${selected.items.map((phrase,index)=>`<button type="button" class="travel-phrase-card" data-phrase-index="${index}" aria-label="放大：${esc(phrase.zh)}"><span class="travel-phrase-zh">${esc(phrase.zh)}</span><span class="travel-phrase-ko" lang="ko">${esc(phrase.ko)}</span><span class="travel-phrase-hint">點一下，放大給對方看 ↗</span></button>`).join('')}</div></section>`;
+ container.querySelectorAll('[data-phrase-category]').forEach(button=>button.onclick=()=>{travelPhraseCategory=button.dataset.phraseCategory;renderTravelPhrases(container);container.querySelector(`[data-phrase-category="${travelPhraseCategory}"]`).focus()});
+ container.querySelectorAll('[data-phrase-index]').forEach(button=>button.onclick=()=>showTravelPhrase(selected.items[Number(button.dataset.phraseIndex)],button));
+}
+
+const bookTabs={phrases:'常用語',notes:'記事',itinerary:'行程',balances:'分帳結算',expenses:'花費明細',members:'成員'};
 function preferenceKey(kind,id=''){
  const account=window.WarmCloud?.user()?.uid||'local';
  return `${storageKey}:${kind}:${account}:${id}`;
@@ -995,9 +1032,10 @@ document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(
  $('addItinerary').hidden=tab!=='itinerary';
  $('addBookNote').hidden=tab!=='notes';
  $('addBookNote').onclick=()=>editBookNote(g);
- $('viewHint').textContent={notes:'依分類查看文字與圖片',itinerary:'依日期查看行程',expenses:'費用紀錄與換算明細',
+ $('viewHint').textContent={phrases:'中韓對照 · 點句子放大給對方看',notes:'依分類查看文字與圖片',itinerary:'依日期查看行程',expenses:'費用紀錄與換算明細',
   balances:'成員餘額 · 點金額查看計算明細',members:'管理帳本的分攤成員'}[tab];
  const c=$('content');
+ if(tab==='phrases'){renderTravelPhrases(c);return}
  if(tab==='notes'){renderBookNotes(g,c);return}
  if(tab==='itinerary'){renderItinerary(g,c);return}
  if(tab==='expenses'){c.innerHTML=g.expenses.length?expenseDays(g.expenses).map(day=>`<section class="expense-day"><div class="day-heading"><h3>${esc(day.date)}</h3><span>${day.expenses.length} 筆 · NT$ ${money(day.total)}</span></div>${day.expenses.map(e=>`<button type="button" class="expense expense-summary shared-expense" data-expense="${esc(e.id)}" aria-label="查看費用：${esc(e.title)}"><span class="icon">${esc(e.category==='🧋'?'🥤':e.category)}</span><span class="detail"><strong>${esc(e.title)}</strong><small>${esc(name(g,e.payer))} 先付</small><span class="paid-total">NT$ ${briefMoney(e.baseCents)}</span></span><span class="amount"><small>${e.split.length} 人 · 各付</small>${e.baseCents%e.split.length?'約 ':''}NT$ ${briefMoney(Math.round(e.baseCents/e.split.length))}</span></button>`).join('')}</section>`).join(''):'<div class="empty"><div class="empty-symbol">▤</div><p>尚無費用，請點「記一筆」新增。</p></div>';c.querySelectorAll('[data-expense]').forEach(b=>b.onclick=()=>showExpense(b.dataset.expense))}else if(tab==='members'){c.innerHTML=g.members.map(m=>`<div class="person"><span class="avatar" aria-hidden="true">${memberAvatar(m)}</span><span class="detail">${esc(m.lineName||m.name)}${m.lineName&&m.lineName!==m.name?`<small>帳本暱稱：${esc(m.name)}</small>`:''}${cfg.lineApiBase&&(m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?'<small>你</small>':cfg.lineApiBase?`<small>${m.lineUserId||/^U[0-9a-f]{32}$/.test(m.id)?'已加入':'待配對'}</small>`:''}</span></div>`).join('')+(cfg.lineApiBase?`<p class="hint">只有加入此帳本的成員可以查看與記帳。${g.canDelete?'使用上方「邀請成員」分享加入連結。':'由帳本建立者邀請新成員。'}</p>`:'<button id="addMember" class="quiet" style="margin-top:20px">＋ 加入成員</button>');if(cfg.lineApiBase){const pay=document.createElement('button');pay.textContent='設定我的收款資訊';pay.className='quiet';pay.onclick=()=>openPayment(g.id, g.members.find(m=>m.id===window.WarmCloud?.user()?.uid||m.lineUserId===window.WarmCloud?.user()?.uid)?.id);c.append(pay)}if(cfg.lineApiBase&&g.canDelete){const add=document.createElement('button');add.textContent='＋ 預設成員';add.className='quiet';add.onclick=()=>modal('預設成員',field('name','成員暱稱','','text','required maxlength="40"')+'<p class="hint">可先替此成員記帳，朋友登入 LINE 後再認領。</p>','新增成員',async f=>{await requireMemberVersion();const r=await api('addMember',{groupId:g.id,name:f.get('name')});state.groups[state.groups.findIndex(x=>x.id===g.id)]=r.group;persist();render()});c.append(add)}if(!cfg.lineApiBase){$('addMember').onclick=()=>modal('新增成員',field('name','成員暱稱','','text','required maxlength="40"'),'加入',async f=>{const n=f.get('name').trim();if(!n||g.members.some(m=>m.name===n))throw Error('請輸入不同的暱稱');const next=structuredClone(g);next.members.push({id:uid(),name:n});await commit(next)})}}else{const b=balances(g),p=plan(g);c.innerHTML=mySettlement(g,p)+'<div class="balance-board">'+balanceRows(g,b)+'</div>'+suggestedTransfers(g,p,c)+repaymentHistory(g,c);c.querySelectorAll('[data-balance-member]').forEach(button=>{button.onclick=()=>showBalanceDetails(button.dataset.balanceMember)});
