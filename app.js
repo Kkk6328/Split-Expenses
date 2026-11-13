@@ -794,7 +794,9 @@ async function loadNotePhotos(g,note){
  return noteImages(result);
 }
 let bookNoteCategory='';
+let notePhotoObserver;
 function renderBookNotes(g,c){
+ notePhotoObserver?.disconnect();
  const notesByCategory=new Map();
  for(const note of g.bookNotes||[]){
   if(!notesByCategory.has(note.category))notesByCategory.set(note.category,[]);
@@ -846,9 +848,18 @@ function renderBookNotes(g,c){
    finally{button.disabled=false}
   };
  });
+ const photoObserver=notePhotoObserver=typeof IntersectionObserver==='function'?new IntersectionObserver((entries,observer)=>{
+  for(const entry of entries){
+   if(!entry.isIntersecting)continue;
+   observer.unobserve(entry.target);
+   if(entry.target.isConnected)entry.target.click();
+  }
+ },{rootMargin:'160px'}):null;
  c.querySelectorAll('[data-load-note-photos]').forEach(button=>{
   button.onclick=async()=>{
+   photoObserver?.unobserve(button);
    button.disabled=true;
+   button.textContent='圖片載入中…';
    try{
     const note=g.bookNotes.find(note=>note.id===button.dataset.loadNotePhotos);
     const images=await loadNotePhotos(g,note);
@@ -865,8 +876,10 @@ function renderBookNotes(g,c){
      return preview;
     });
     button.replaceWith(...previews);
-   }catch(e){toast(e.message);button.disabled=false}
+   }catch(e){if(button.isConnected){button.textContent='圖片載入失敗，點此重試';button.disabled=false}}
   };
+  if(photoObserver)photoObserver.observe(button);
+  else button.click();
  });
  c.querySelectorAll('[data-book-note-photo]').forEach(button=>{
   button.onclick=()=>{
@@ -957,6 +970,7 @@ function render(){const g=group();
   if(g)try{localStorage.setItem(preferenceKey('current'),g.id)}catch{}
  }
  if(tab!=='itinerary')itineraryView=null;
+if(tab!=='notes')notePhotoObserver?.disconnect();
 document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(picker){picker.innerHTML=activeGroups().map(x=>`<option value="${esc(x.id)}" ${x.id===g?.id?'selected':''}>${esc(x.name)}</option>`).join('');picker.onchange=()=>{state.current=picker.value;persist();render()};$('mobileNew').onclick=newGroup;}if(cfg.lineApiBase&&$('emptyTitle')){$('emptyTitle').textContent=cloud()?'尚未建立帳本':'登入後查看帳本';$('emptyCreate').textContent=cloud()?'建立帳本':'LINE 登入'}$('groupCount').textContent=activeGroups().length;$('groups').innerHTML=activeGroups().map(x=>`<button class="group ${x.id===g?.id?'selected':''}" data-group="${x.id}">▤ ${esc(x.name)}<small>${x.members.length} 位成員 · ${x.expenses.length} 筆費用${x.cloud?' · 共用':''}</small></button>`).join('');$('groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.current=b.dataset.group;persist();render()});$('empty').hidden=!!g;$('book').hidden=!g;if(!g)return;$('deleteBook').hidden=g.cloud&&g.canDelete!==true;$('revokeInvites').hidden=!g.cloud||g.canDelete!==true;$('invite').hidden=g.cloud&&g.canDelete!==true;$('bookTitle').textContent=g.name;$('bookMeta').textContent=`建立日期 ${g.created}`;
  const member=signedInMember(g);
  const personalTotal=$('personalTotal');
