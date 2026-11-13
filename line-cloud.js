@@ -42,7 +42,7 @@ if(window.APP_CONFIG.lineApiBase){
  }
  function updateOpenInLine(){
   const hint=document.getElementById('openInLineHint');
-  document.getElementById('resumeHomeLogin').hidden=!installed||!!user||!homeLoginTransfer.pending();
+  document.getElementById('resumeHomeLogin').hidden=!installed||!!user;
   hint.hidden=!homeScreen||!!user;
   if(hint.hidden)return;
   const url=new URL('https://liff.line.me/'+cfg.liffId+'/');
