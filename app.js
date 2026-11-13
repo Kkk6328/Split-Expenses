@@ -896,6 +896,63 @@ async function loadNotePhotos(g,note){
 }
 let bookNoteCategory='';
 let notePhotoObserver;
+const purchaseCelebrations=[
+ '恭喜找到了🎉 記得是免稅不是免費💸',
+ '來都來了 就買吧',
+ '回去別搭地鐵了 坐車吧',
+ '還是得買買買啊，拒絕內耗，快樂的源泉',
+ '不買的話 台灣是不是就沒那麼便宜了？',
+ '不買好像就虧了一個億',
+ '賺多少錢沒辦法決定妳的快樂 但花錢可以',
+ '鈔票放著會變多嗎？ 那妳還不花',
+ '小孩才做選擇 我全都要',
+ '買買買買買買買買',
+ '不對自己好 誰會對妳好',
+ '錢錢沒有不見 只是妳需要那個酷東西',
+ '沒關係～餓幾餐而已 就買吧',
+ '錢就是可以買到快樂🎊',
+ '買的不是東西，是一趟不留遺憾的旅程 ✨',
+ '猶豫一分鐘，快樂就少了六十秒',
+ '這不是亂買，是認真支持韓國經濟 🇰🇷',
+ '行李箱還有空位，它在暗示妳什麼 🧳',
+ '這個價格錯過了，回飯店會睡不著吧？',
+ '妳不是花錢，妳是在替回憶找紀念品 📸',
+ '錢包瘦一點，行李箱胖一點，剛剛好',
+ '恭喜解鎖新戰利品！下一個目標在哪裡 🔍'
+];
+let lastPurchaseCelebration=-1;
+const pendingNotePurchases=new Set();
+function showPurchaseCelebration(noteId,title){
+ let index=Math.floor(Math.random()*purchaseCelebrations.length);
+ if(index===lastPurchaseCelebration)index=(index+1)%purchaseCelebrations.length;
+ lastPurchaseCelebration=index;
+ const dialog=document.createElement('dialog');
+ dialog.className='purchase-celebration';dialog.id='purchaseCelebration';
+ dialog.setAttribute('aria-labelledby','purchaseCelebrationTitle');
+ dialog.innerHTML=`<div class="dialog-head"><h2 id="purchaseCelebrationTitle">已買到 🎉</h2><button type="button" class="quiet" aria-label="關閉購物語錄">✕</button></div><p class="purchase-item-name">${esc(title)}</p><p class="purchase-quote">${esc(purchaseCelebrations[index])}</p><button type="button" class="purchase-done">開心收下！</button>`;
+ document.body.append(dialog);
+ dialog.querySelectorAll('button').forEach(button=>button.onclick=()=>dialog.close());
+ dialog.addEventListener('close',()=>{dialog.remove();const checkbox=[...document.querySelectorAll('[data-note-purchased]')].find(input=>input.dataset.notePurchased===noteId);checkbox?.focus({preventScroll:true});},{once:true});
+ dialog.showModal();
+}
+async function toggleNotePurchased(g,note,input){
+ const key=g.id+':'+note.id;
+ if(pendingNotePurchases.has(key))return;
+ const purchased=input.checked,category=bookNoteCategory;
+ pendingNotePurchases.add(key);input.disabled=true;
+ try{
+  const next={...note,purchased};
+  await saveBookNote(g,note,next);
+  if(group()?.id===g.id&&tab==='notes'&&bookNoteCategory===category){
+   if(purchased&&!document.querySelector('dialog[open]'))showPurchaseCelebration(note.id,note.title);
+   else if(!purchased)toast('已取消勾選，恢復為尚未買到');
+  }
+ }catch(error){input.checked=note.purchased===true;toast(error.message||'儲存失敗，請再試一次');}
+ finally{
+  pendingNotePurchases.delete(key);input.disabled=false;
+  if(group()?.id===g.id)document.querySelectorAll('[data-note-purchased]').forEach(checkbox=>{if(checkbox.dataset.notePurchased===note.id)checkbox.disabled=false});
+ }
+}
 function renderBookNotes(g,c){
  notePhotoObserver?.disconnect();
  const notesByCategory=new Map();
@@ -912,8 +969,8 @@ function renderBookNotes(g,c){
  const visibleNotes=bookNoteCategory?[[bookNoteCategory,notesByCategory.get(bookNoteCategory)]]:[...notesByCategory];
  c.innerHTML=picker+(visibleNotes.map(([category,notes])=>`<section class="book-notes-category">
   ${bookNoteCategory?'':`<h3>${esc(category)}</h3>`}
-  ${notes.map(note=>`<article class="book-note">
-   <div class="book-note-heading"><h4>${esc(note.title)}</h4>
+  ${notes.map(note=>`<article class="book-note${note.purchased===true?' is-purchased':''}">
+   <div class="book-note-heading"><div class="book-note-title"><label class="note-purchased-toggle"><input type="checkbox" data-note-purchased="${esc(note.id)}" ${note.purchased===true?'checked':''} ${pendingNotePurchases.has(g.id+':'+note.id)?'disabled':''} aria-label="${note.purchased===true?'取消已買到':'標記已買到'}：${esc(note.title)}"><span>${note.purchased===true?'已買到 ✓':'買到了打勾'}</span></label><h4>${esc(note.title)}</h4></div>
     <button type="button" class="quiet" data-edit-book-note="${esc(note.id)}" aria-label="編輯記事 ${esc(note.title)}">編輯</button></div>
    ${note.address||note.mapUrl?mapAddressMarkup(note.address,note.mapUrl,note.title):''}
    ${note.text?`<p>${esc(note.text)}</p>`:''}
@@ -938,6 +995,7 @@ function renderBookNotes(g,c){
    };
   });
  }
+ c.querySelectorAll('[data-note-purchased]').forEach(input=>{input.onchange=()=>{const note=g.bookNotes.find(item=>item.id===input.dataset.notePurchased);if(note)toggleNotePurchased(g,note,input);};});
  c.querySelectorAll('[data-edit-book-note]').forEach(button=>{
   button.onclick=async()=>{
    button.disabled=true;
@@ -1044,6 +1102,7 @@ function editBookNote(g,note,images=noteImages(note)){
    const address=form.get('noteAddress').trim(),mapUrl=readMapUrl(form);
    const purchaseNote=form.get('purchaseNote').trim();
    await saveBookNote(g,note,{id,category,title,text:form.get('noteText').trim(),images:[...await readImages()],
+    ...(note?.purchased===true?{purchased:true}:{}),
     ...(purchaseNote?{purchaseNote}:{}),...(address?{address}:{}),...(mapUrl?{mapUrl}:{})});
   });
  const categoryPicker=$('f-noteCategory'),categoryName=$('f-noteCategoryName');

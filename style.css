@@ -413,3 +413,15 @@ dialog:modal{
 .travel-phrase-show:hover{background:transparent;color:inherit}
 .phrase-speak{min-height:44px}
 .travel-phrase-card .phrase-speak{align-self:flex-start;border:1px solid var(--line)}
+
+/* Purchased status is persistent; keep note details readable. */
+.book-note.is-purchased{border-color:#98bba7;background:#f5faf6}
+.book-note-title{min-width:0;display:flex;flex-direction:column;gap:8px}
+.note-purchased-toggle{display:inline-flex;align-items:center;gap:8px;min-height:44px;width:fit-content;margin:0;font-size:14px;font-weight:600;cursor:pointer}
+.note-purchased-toggle input{width:23px;height:23px;min-height:23px;margin:0;accent-color:#367455;flex-shrink:0}
+.note-purchased-toggle:has(input:disabled){opacity:.6;cursor:wait}
+.book-note.is-purchased .note-purchased-toggle{color:#25663f}
+.purchase-celebration{width:480px}
+.purchase-item-name{color:var(--muted);overflow-wrap:anywhere}
+.purchase-quote{font-size:clamp(24px,5vw,32px);font-weight:700;line-height:1.65;margin:24px 0;overflow-wrap:anywhere}
+.purchase-done{width:100%;min-height:48px}
