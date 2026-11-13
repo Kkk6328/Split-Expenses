@@ -11,7 +11,7 @@ function persist(){
 }
 function showAuthRecovery(message){const box=$('formError');box.textContent=message;const button=document.createElement('button');button.type='button';button.className='quiet';button.textContent='重新登入 LINE';button.onclick=()=>window.WarmCloud.reconnect().catch(e=>{box.textContent=e.message});box.append(document.createElement('br'),button)}
 async function api(action,data={}){if(!window.WarmCloud)throw Error('雲端模組尚未載入，請稍後再試');try{return await window.WarmCloud.api(action,data)}catch(e){if(e.code==='resource-exhausted')throw Error('今日免費額度已用完，請稍後再試；不會自動收費');if(e.code==='permission-denied')throw Error('沒有權限，或 Firebase 共用規則尚未發布');throw e}}
-async function save(g){if(g.cloud){if(!cloud())throw Error(cfg.lineApiBase?'請先登入 LINE 再更新共用帳本':'請先登入 Google 再更新共用帳本');const r=await api('save',{group:g,version:g.version});Object.assign(g,r.group)}persist();render()}
+async function save(g,options={}){if(g.cloud){if(!cloud())throw Error(cfg.lineApiBase?'請先登入 LINE 再更新共用帳本':'請先登入 Google 再更新共用帳本');const r=await api('save',{group:g,version:g.version,...options});Object.assign(g,r.group)}persist();render()}
 function modal(title,html,submit,callback,onSaved){
  const dialog=$('modal'),form=$('form'),button=$('submit');
  $('dialogTitle').textContent=title;
@@ -788,6 +788,11 @@ function noteImages(note){
  if(!Array.isArray(note?.images))return [];
  return note.images.filter(src=>typeof src==='string'&&/^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(src));
 }
+async function loadNotePhotos(g,note){
+ if(!note.imageCount)return noteImages(note);
+ const result=await api('getNoteImages',{groupId:g.id,noteId:note.id});
+ return noteImages(result);
+}
 let bookNoteCategory='';
 function renderBookNotes(g,c){
  const notesByCategory=new Map();
@@ -815,7 +820,7 @@ function renderBookNotes(g,c){
     <p lang="ko">이거 어디 있어요?</p>
     <p>請問這個在哪裡？</p>
    </details>
-   <div class="book-note-photos">${noteImages(note).map((src,index)=>`<button type="button" class="expense-photo-thumb" data-book-note-photo="${esc(note.id)}" data-photo-index="${index}" aria-label="放大 ${esc(note.title)} 的圖片 ${index+1}"><img loading="lazy" src="${esc(src)}" alt=""></button>`).join('')}</div>
+   <div class="book-note-photos">${note.imageCount?'<button type="button" class="quiet" data-load-note-photos="'+esc(note.id)+'">查看 '+note.imageCount+' 張圖片</button>':''}${noteImages(note).map((src,index)=>`<button type="button" class="expense-photo-thumb" data-book-note-photo="${esc(note.id)}" data-photo-index="${index}" aria-label="放大 ${esc(note.title)} 的圖片 ${index+1}"><img loading="lazy" src="${esc(src)}" alt=""></button>`).join('')}</div>
   </article>`).join('')}
  </section>`).join('')||'<div class="empty"><p>還沒有記事。可以把商品照片、想買的規格和分店找貨進度放在同一篇。</p></div>');
  const categoryBar=c.querySelector('.book-note-categories');
@@ -831,7 +836,37 @@ function renderBookNotes(g,c){
   });
  }
  c.querySelectorAll('[data-edit-book-note]').forEach(button=>{
-  button.onclick=()=>editBookNote(g,g.bookNotes.find(note=>note.id===button.dataset.editBookNote));
+  button.onclick=async()=>{
+   button.disabled=true;
+   try{
+    const note=g.bookNotes.find(note=>note.id===button.dataset.editBookNote);
+    const images=await loadNotePhotos(g,note);
+    if(button.isConnected)editBookNote(g,note,images);
+   }catch(e){toast(e.message)}
+   finally{button.disabled=false}
+  };
+ });
+ c.querySelectorAll('[data-load-note-photos]').forEach(button=>{
+  button.onclick=async()=>{
+   button.disabled=true;
+   try{
+    const note=g.bookNotes.find(note=>note.id===button.dataset.loadNotePhotos);
+    const images=await loadNotePhotos(g,note);
+    if(!button.isConnected)return;
+    const previews=images.map((src,index)=>{
+     const preview=document.createElement('button'),image=document.createElement('img');
+     preview.type='button';
+     preview.className='expense-photo-thumb';
+     preview.setAttribute('aria-label','放大圖片 '+(index+1));
+     image.src=src;
+     image.alt='';
+     preview.append(image);
+     preview.onclick=()=>viewPhoto(src,'note-'+(index+1)+'.jpg');
+     return preview;
+    });
+    button.replaceWith(...previews);
+   }catch(e){toast(e.message);button.disabled=false}
+  };
  });
  c.querySelectorAll('[data-book-note-photo]').forEach(button=>{
   button.onclick=()=>{
@@ -852,16 +887,17 @@ async function saveBookNote(g,previous,nextNote){
  }
  const bookNotes=previous?notes.flatMap(note=>note.id===previous.id?(nextNote?[nextNote]:[]):[note]):[...notes,nextNote];
  const next={...structuredClone(current),bookNotes};
- if(nextNote&&JSON.stringify(next).length>500000)throw Error('帳本容量已滿，請減少圖片後再儲存');
+ const separateNoteImages=Boolean(g.cloud&&cfg.lineApiBase&&(await api('capabilities')).noteImageVersion>=1);
+ if(!separateNoteImages&&nextNote&&JSON.stringify(next).length>500000)throw Error('帳本容量已滿，請減少圖片後再儲存');
  const selected=bookNoteCategory;
- await commit(next);
+ await commit(next,{separateNoteImages});
  const updated=group();
  if(selected&&nextNote&&nextNote.category!==bookNoteCategory&&tab==='notes'&&updated?.id===g.id){
   bookNoteCategory=nextNote.category;
   renderBookNotes(updated,$('content'));
  }
 }
-function editBookNote(g,note){
+function editBookNote(g,note,images=noteImages(note)){
  const notes=g.bookNotes||[];
  const categories=[...new Set(notes.map(entry=>entry.category))];
  const selected=note?.category||notes.at(-1)?.category||'';
@@ -901,13 +937,13 @@ function editBookNote(g,note){
   $('noteCategoryNew').hidden=categoryName.disabled=!creating;
   if(creating)categoryName.focus();
  };
- readImages=imageEditor(noteImages(note),3,{maxLength:54000,caption:'記事圖片',filenamePrefix:'note'});
+ readImages=imageEditor(images,3,{maxLength:54000,caption:'記事圖片',filenamePrefix:'note'});
  if(note)$('removeBookNote').onclick=()=>{
   if($('submit').disabled)return;
   modal('刪除記事',`<p>確定移除「${esc(note.title)}」和附在這篇記事的圖片？</p>
    <button type="button" class="quiet" id="cancelRemoveBookNote">取消</button>`,
    '確認刪除',()=>saveBookNote(g,note,null));
-  $('cancelRemoveBookNote').onclick=()=>{if(!$('submit').disabled)editBookNote(g,note)};
+  $('cancelRemoveBookNote').onclick=()=>{if(!$('submit').disabled)editBookNote(g,note,images)};
  };
 }
 function render(){const g=group();
@@ -1029,7 +1065,7 @@ function repaymentHistory(book,container){
  return repaymentSection('已記錄還款','repayments',book,container,groups,book.settlements.length);
 }
 
-async function commit(next){await save(next);state.groups[state.groups.findIndex(g=>g.id===next.id)]=next;persist();render()}
+async function commit(next,options){await save(next,options);state.groups[state.groups.findIndex(g=>g.id===next.id)]=next;persist();render()}
 async function editExpense(id){const g=group(),e=g.expenses.find(e=>e.id===id);const draftId=e?.id||uid();let images=[],imageRevision='',photoAvailable=true,readImages=null,expenseSaved=false;if(e&&cfg.lineApiBase){try{await requireMedia();const data=await api('getExpenseImages',{groupId:g.id,expenseId:e.id});images=data.images;imageRevision=data.revision}catch(error){photoAvailable=false;toast('圖片暫時無法載入，可先編輯費用：'+error.message)}}if(group()?.id!==g.id)return;const initialImages=JSON.stringify(images);const opt=(v,label)=>`<option value="${v}" ${e?.currency===v?'selected':''}>${label}</option>`;modal(e?'編輯這筆費用':'新增費用',field('title','花費名稱',e?.title||'','text','required maxlength="80" placeholder="例如：安國的午餐"')+'<div class="row"><div>'+field('amount','原幣金額',e?.amount||'','number','required min="0.01" max="1000000000" step="0.01"')+'</div><div><label for="currency">幣別</label><select id="currency" name="currency">'+[['TWD','TWD 新台幣'],['KRW','KRW 韓元'],['JPY','JPY 日圓'],['USD','USD 美元'],['EUR','EUR 歐元'],['CNY','CNY 人民幣'],['HKD','HKD 港幣'],['THB','THB 泰銖']].map(a=>opt(...a)).join('')+'</select></div></div>'+field('rate','當時匯率：1 單位外幣 = 多少 TWD',e?.rate||1,'number','required min="0.000001" max="1000000" step="any"')+'<p class="hint" id="conversion"></p><div class="row date-category-row"><div>'+field('date','消費日期',e?.date||today(),'date','required')+'</div><div><label for="category">分類</label><select id="category" name="category">'+[["🍴","餐飲"],["🍳","早餐"],["🍜","麵食"],["🍚","正餐"],["🍖","烤肉"],["🍣","日式料理"],["🍕","速食"],["☕","咖啡"],["🥤","飲料"],["🍰","甜點"],["🍦","冰品"],["🍺","酒水"],["🏠","住宿"],["🏨","飯店"],["🚕","計程車"],["🚇","地鐵"],["🚌","公車"],["🚆","火車"],["✈️","機票"],["🚗","租車"],["⛽","加油"],["🅿️","停車"],["🛍","購物"],["🛒","超市"],["👕","衣服"],["👟","鞋子"],["💄","美妝"],["🎁","伴手禮"],["🎟","門票"],["🎢","遊樂園"],["🎬","電影"],["🎤","唱歌"],["🎮","遊戲"],["🏛️","展覽"],["💆","按摩"],["💊","藥品"],["🏥","醫療"],["📱","網路／SIM 卡"],["🧺","洗衣"],["🧾","其他"]].map(([v,label])=>`<option value="${v}" ${(e?.category==='🧋'?'🥤':e?.category)===v?'selected':''}>${v} ${label}</option>`).join('')+'</select></div></div><label for="payer">誰先付款？</label><select id="payer" name="payer">'+g.members.map(m=>`<option value="${m.id}" ${e?.payer===m.id?'selected':''}>${esc(m.name)}</option>`).join('')+'</select><label>分給誰？（平均分攤）</label>'+g.members.map(m=>`<label class="check"><input type="checkbox" name="split" value="${m.id}" ${!e||e.split.includes(m.id)?'checked':''}>${esc(m.name)}</label>`).join('')+'<h3 class="expense-photo-heading">收據／照片（選填）</h3>'+(photoAvailable?'<div id="photoEditor"></div>':'<p class="hint">圖片暫時無法載入，原有圖片會保留。請稍後重試。</p>')+(e?'<p><button type="button" id="removeExpense" class="quiet">刪除這筆費用</button></p>':''),'儲存這筆費用',async f=>{const currency=f.get('currency'),amount=Number(f.get('amount')),rate=currency==='TWD'?1:Number(f.get('rate')),split=f.getAll('split'),baseCents=Math.round(amount*rate*100);if(!split.length)throw Error('請至少選擇一位分攤成員');if(!Number.isSafeInteger(baseCents)||baseCents<1||!Number.isFinite(rate)||rate<=0)throw Error('請確認金額與匯率');const title=f.get('title').trim();if(!title)throw Error('請填寫花費名稱');const expense={id:draftId,title,amount,currency,rate,baseCents,split,payer:f.get('payer'),date:f.get('date'),category:f.get('category'),created:e?.created||Date.now()};const selectedImages=readImages?await readImages():images,imagesChanged=photoAvailable&&JSON.stringify(selectedImages)!==initialImages;if(imagesChanged)await requireMedia();const latest=state.groups.find(x=>x.id===g.id);if(!latest||latest.deletedAt)throw Error('帳本已變更，請重新開啟');const next=structuredClone(latest),index=next.expenses.findIndex(x=>x.id===draftId);if(e&&index<0)throw Error('這筆費用已被刪除，請重新同步');if(index>=0){
  const prior=next.expenses[index];
  if(next.settlements.some(s=>paymentApplications(s).some(part=>part.expenseId===draftId))){
