@@ -425,3 +425,13 @@ dialog:modal{
 .purchase-item-name{color:var(--muted);overflow-wrap:anywhere}
 .purchase-quote{font-size:clamp(24px,5vw,32px);font-weight:700;line-height:1.65;margin:24px 0;overflow-wrap:anywhere}
 .purchase-done{width:100%;min-height:48px}
+
+.purchase-comic{position:relative;margin:12px auto 8px;max-width:430px;animation:purchase-pop .35s ease-out both}
+.purchase-comic img{display:block;width:100%;height:auto;border-radius:22px}
+.purchase-comic span{display:block;text-align:center;font-size:14px;font-weight:700;line-height:1.6;color:#74502c;margin-top:8px}
+.purchase-sound-controls{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:12px}
+.purchase-sound-controls small{color:var(--muted);font-size:11px;line-height:1.5}
+.purchase-sound-toggle{font-size:13px;min-height:44px}
+@keyframes purchase-pop{from{opacity:0;transform:scale(.88) rotate(-3deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+@media(prefers-reduced-motion:reduce){.purchase-comic{animation:none}}
+@media(max-width:600px){.purchase-comic{max-width:300px}.purchase-quote{margin-block:16px;font-size:24px}}

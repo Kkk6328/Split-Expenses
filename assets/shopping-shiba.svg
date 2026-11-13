@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 340" role="img" aria-labelledby="title desc">
+<title id="title">開心購物黑柴與冒汗的小錢包</title><desc id="desc">黑色柴犬戴著墨鏡，提著滿滿購物袋開心跳起來，旁邊的小錢包冒汗，長長的收據像彩帶飛舞。</desc>
+<rect x="8" y="8" width="624" height="324" rx="34" fill="#fff4d6"/>
+<ellipse cx="325" cy="300" rx="194" ry="15" fill="#e9d9b3"/>
+<g stroke="#27313b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M448 156q70 7 48 43t49 18l-17 31q-71-5-55-33t-48-23" fill="#fff"/>
+<path d="m461 169 20 5m12 48 23 8m-22-38 12 4" stroke="#b6bdc5" stroke-width="3"/>
+<g fill="#ffd654"><rect x="347" y="138" width="70" height="100" rx="22"/><path d="M376 141v-18q32-14 37 13" fill="none"/></g>
+<path d="M255 222q-8 31-26 49l24 10 43-38m31-1 19 32 28-3-17-57" fill="#262d36"/>
+<ellipse cx="314" cy="203" rx="65" ry="70" fill="#252c35"/>
+<ellipse cx="314" cy="220" rx="36" ry="43" fill="#fff5db" stroke="none"/>
+<path d="m251 175-48 28m165-32 54 23" fill="none" stroke-width="19"/>
+<path d="m248 116-7-77 54 38m46-1 45-41-1 84" fill="#252c35"/>
+<path d="m254 81 2-22 25 19m76 1 17-20 1 24" fill="#d5a671" stroke="none"/>
+<ellipse cx="314" cy="129" rx="81" ry="66" fill="#252c35"/>
+<path d="M250 140q30-2 64 8 30-10 64-8-14 46-64 47-51 0-64-47" fill="#fff5db" stroke="none"/>
+<path d="m263 99 26-5m47 1 25 5" stroke="#d9ac76" stroke-width="11"/>
+<g fill="#111820"><path d="m248 112 58 2-9 26h-31z"/><path d="m323 114 57-2-18 28h-30z"/><path d="M307 118h16"/></g>
+<path d="m263 117 16 9m62-9 13 8" stroke="#a5d6dc" stroke-width="3"/>
+<path d="m305 148 18 0-9 8z" fill="#252c35"/>
+<path d="M295 161q19 29 38 0" fill="#d76478"/>
+<path d="M200 197q-27-42-44 0" fill="none"/><path d="m135 198 74-4 12 83-82 5z" fill="#8bd2ce"/>
+<path d="M177 210q-24-37-36 0" fill="none"/><path d="m119 212 69-4 8 70-73 6z" fill="#ff9d9d"/>
+<path d="M414 193q22-42 43 3" fill="none"/><path d="m409 194 68 6-7 82-78-9z" fill="#c1a5e8"/>
+<path d="m415 217 40 4m-26 6-2 26" stroke="#fff" stroke-width="7"/>
+<g transform="rotate(12 520 268)"><rect x="483" y="242" width="92" height="51" rx="12" fill="#b57a54"/><path d="m547 256 33 0v25h-33z" fill="#d2a67b"/><circle cx="563" cy="268" r="3" fill="#27313b"/><path d="m499 257 7 3m16-3-7 3m-8 16q8-8 15 0" fill="none" stroke-width="3"/></g>
+<path d="M583 230q-16 19-1 21 13-3 1-21" fill="#87cee5" stroke="none"/>
+</g>
+<g fill="#f6b742"><path d="m99 116 7 16 17 2-14 11 4 17-15-9-15 9 4-17-14-11 17-2z"/><path d="m498 74 6 12 14 2-10 10 3 14-13-7-13 7 3-14-10-10 14-2z"/></g>
+<g stroke-width="6" stroke-linecap="round" fill="none"><path d="m161 93 8 11m278-13 8-12m-35-32 3 14m-178-6-8-11" stroke="#f298a7"/><path d="m91 212 15-5m456-53 14 5m-195 143 10 5" stroke="#79bfc8"/></g>
+</svg>

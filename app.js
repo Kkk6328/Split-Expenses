@@ -922,6 +922,33 @@ const purchaseCelebrations=[
 ];
 let lastPurchaseCelebration=-1;
 const pendingNotePurchases=new Set();
+let purchaseAudioContext=null;
+let purchaseSoundMuted=false;
+try{purchaseSoundMuted=localStorage.getItem('split-purchase-sound-muted')==='true'}catch{}
+function preparePurchaseSound(){
+ if(purchaseSoundMuted)return;
+ try{
+  const Audio=window.AudioContext||window.webkitAudioContext;
+  if(!Audio)return;
+  if(!purchaseAudioContext)purchaseAudioContext=new Audio();
+  // Start/resume inside the checkbox gesture; only play after save succeeds.
+  if(purchaseAudioContext.state!=='running')purchaseAudioContext.resume().catch(()=>{});
+ }catch{}
+}
+function playPurchaseSound(){
+ if(purchaseSoundMuted||!purchaseAudioContext||purchaseAudioContext.state!=='running')return false;
+ try{
+  const context=purchaseAudioContext,start=context.currentTime;
+  [659.25,830.61,987.77,1318.51].forEach((frequency,index)=>{
+   const oscillator=context.createOscillator(),gain=context.createGain(),at=start+index*.11;
+   oscillator.type='sine';oscillator.frequency.setValueAtTime(frequency,at);
+   gain.gain.setValueAtTime(0,at);gain.gain.linearRampToValueAtTime(.065,at+.012);gain.gain.exponentialRampToValueAtTime(.001,at+.24);
+   oscillator.connect(gain);gain.connect(context.destination);oscillator.start(at);oscillator.stop(at+.25);
+   oscillator.onended=()=>{oscillator.disconnect();gain.disconnect()};
+  });
+  return true;
+ }catch{return false;}
+}
 function showPurchaseCelebration(noteId,title){
  let index=Math.floor(Math.random()*purchaseCelebrations.length);
  if(index===lastPurchaseCelebration)index=(index+1)%purchaseCelebrations.length;
@@ -929,16 +956,19 @@ function showPurchaseCelebration(noteId,title){
  const dialog=document.createElement('dialog');
  dialog.className='purchase-celebration';dialog.id='purchaseCelebration';
  dialog.setAttribute('aria-labelledby','purchaseCelebrationTitle');
- dialog.innerHTML=`<div class="dialog-head"><h2 id="purchaseCelebrationTitle">已買到 🎉</h2><button type="button" class="quiet" aria-label="關閉購物語錄">✕</button></div><p class="purchase-item-name">${esc(title)}</p><p class="purchase-quote">${esc(purchaseCelebrations[index])}</p><button type="button" class="purchase-done">開心收下！</button>`;
+ dialog.innerHTML=`<div class="dialog-head"><h2 id="purchaseCelebrationTitle">已買到 🎉</h2><button type="button" class="quiet" aria-label="關閉購物語錄">✕</button></div><p class="purchase-item-name">${esc(title)}</p><div class="purchase-comic"><img src="assets/shopping-shiba.svg?v=1" alt="黑柴戴墨鏡提滿購物袋開心跳起，小錢包在旁邊冒汗" width="640" height="340"><span>本人：快樂起飛！<br>錢包：我先冷靜一下。</span></div><p class="purchase-quote">${esc(purchaseCelebrations[index])}</p><button type="button" class="purchase-done">開心收下！</button><div class="purchase-sound-controls"><button type="button" class="quiet purchase-sound-toggle" aria-pressed="${!purchaseSoundMuted}">${purchaseSoundMuted?'🔇 提示音：關閉':'🔔 提示音：開啟'}</button><small>音效受裝置音量、靜音與瀏覽器設定影響。</small></div>`;
  document.body.append(dialog);
- dialog.querySelectorAll('button').forEach(button=>button.onclick=()=>dialog.close());
+ dialog.querySelectorAll('.dialog-head button,.purchase-done').forEach(button=>button.onclick=()=>dialog.close());
+ dialog.querySelector('.purchase-sound-toggle').onclick=event=>{purchaseSoundMuted=!purchaseSoundMuted;try{localStorage.setItem('split-purchase-sound-muted',String(purchaseSoundMuted))}catch{}event.currentTarget.textContent=purchaseSoundMuted?'🔇 提示音：關閉':'🔔 提示音：開啟';event.currentTarget.setAttribute('aria-pressed',String(!purchaseSoundMuted));};
  dialog.addEventListener('close',()=>{dialog.remove();const checkbox=[...document.querySelectorAll('[data-note-purchased]')].find(input=>input.dataset.notePurchased===noteId);checkbox?.focus({preventScroll:true});},{once:true});
  dialog.showModal();
+ playPurchaseSound();
 }
 async function toggleNotePurchased(g,note,input){
  const key=g.id+':'+note.id;
  if(pendingNotePurchases.has(key))return;
  const purchased=input.checked,category=bookNoteCategory;
+ if(purchased)preparePurchaseSound();
  pendingNotePurchases.add(key);input.disabled=true;
  try{
   const next={...note,purchased};
