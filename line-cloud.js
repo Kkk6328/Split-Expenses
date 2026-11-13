@@ -49,11 +49,14 @@ if(window.APP_CONFIG.lineApiBase){
   finally{clearTimeout(timer)}
  }
  async function resumeHomeLogin(){
+  if(!installed||user||document.hidden||checkingRelay||finishingHomeLogin)return;
+  const saved=homeLoginTransfer.read();
   const secret=homeLoginTransfer.relaySecret();
-  if(!installed||user||document.hidden||checkingRelay||!secret)return;
+  if(!saved&&!secret)return;
   document.getElementById('status').textContent='正在接續 LINE 登入…';
   checkingRelay=true;
   try{
+   if(saved){await announceHomeSession(saved);return}
    const response=await fetchWithDeadline({method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({action:'readHomeLoginRelay',secret})},result=>result.ok?result.json():{});
    const {code}=response;
@@ -185,8 +188,10 @@ if(window.APP_CONFIG.lineApiBase){
   try{
    if(!location.hash)try{const pending=sessionStorage.getItem('split-pending-invite');if(pending?.startsWith('#join=')){history.replaceState(null,'',location.pathname+location.search+pending);sessionStorage.removeItem('split-pending-invite')}}catch{}
    updateOpenInLine();
-   const saved=installed?homeLoginTransfer.read():null;
-   if(saved){await announceHomeSession(saved);return}
+   if(installed&&(homeLoginTransfer.read()||homeLoginTransfer.relaySecret())){
+    await resumeHomeLogin();
+    return;
+   }
    await initialize();
    if((homeLogin==='start'||homeLogin==='renew')&&!liff.isInClient()){
     if(homeLogin==='renew'&&liff.isLoggedIn())liff.logout();
