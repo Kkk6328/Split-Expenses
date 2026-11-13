@@ -18,7 +18,7 @@ function photoButton(label,action){const b=document.createElement('button');b.ty
 function downloadPhoto(src,filename){const bytes=Uint8Array.from(atob(src.split(',')[1]),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'}));const a=document.createElement('a');a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)}
 function photoPNG(src){return new Promise((resolve,reject)=>{const img=new Image();img.onerror=()=>reject(Error('圖片讀取失敗'));img.onload=()=>{const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);c.toBlob(b=>b?resolve(b):reject(Error('圖片轉換失敗')),'image/png')};img.src=src})}
 async function copyPhoto(src,status){if(!navigator.clipboard?.write||!window.ClipboardItem){status.textContent='此瀏覽器不支援複製圖片，請下載或放大後長按圖片。';return}try{await navigator.clipboard.write([new ClipboardItem({'image/png':photoPNG(src)})]);status.textContent='已複製圖片，可貼到其他支援圖片的應用程式。'}catch{status.textContent='無法複製圖片，請下載或放大後長按圖片。'}}
-function viewPhoto(src,filename,allowActions=true){
+function viewPhoto(src,filename,allowActions=true,gallery=null){
  const dialog=document.createElement('dialog');
  dialog.className='photo-viewer';
  dialog.setAttribute('aria-label','查看圖片');
@@ -59,7 +59,35 @@ function viewPhoto(src,filename,allowActions=true){
  const actions=document.createElement('div');
  actions.className='photo-actions';
  if(allowActions)actions.append(photoButton('複製圖片',()=>copyPhoto(src,status)),photoButton('下載圖片',()=>downloadPhoto(src,filename)));
- dialog.append(head,controls,area,actions,status);
+ if(gallery?.images.length>1){
+  let index=gallery.index;
+  const navigation=document.createElement('div'),counter=document.createElement('span');
+  navigation.className='photo-actions';
+  counter.setAttribute('aria-live','polite');
+  const previous=photoButton('上一張',()=>show(index-1));
+  const next=photoButton('下一張',()=>show(index+1));
+  function show(position){
+   if(position<0||position>=gallery.images.length)return;
+   index=position;
+   src=gallery.images[index];
+   filename='note-'+(index+1)+'.jpg';
+   counter.textContent=(index+1)+' / '+gallery.images.length;
+   previous.disabled=index===0;
+   next.disabled=index===gallery.images.length-1;
+   resize(1);
+   area.scrollTop=area.scrollLeft=0;
+   image.src=src;
+  }
+  navigation.append(previous,counter,next);
+  dialog.append(head,navigation);
+  dialog.addEventListener('keydown',event=>{
+   if(zoom!==1||!['ArrowLeft','ArrowRight'].includes(event.key))return;
+   event.preventDefault();
+   show(index+(event.key==='ArrowRight'?1:-1));
+  });
+  show(index);
+ }else dialog.append(head);
+ dialog.append(controls,area,actions,status);
  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
  document.body.append(dialog);
  dialog.showModal();

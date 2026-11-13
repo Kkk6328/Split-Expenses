@@ -872,7 +872,7 @@ function renderBookNotes(g,c){
      image.src=src;
      image.alt='';
      preview.append(image);
-     preview.onclick=()=>viewPhoto(src,'note-'+(index+1)+'.jpg');
+     preview.onclick=()=>viewPhoto(src,'note-'+(index+1)+'.jpg',true,{images,index});
      return preview;
     });
     button.replaceWith(...previews);
@@ -885,7 +885,8 @@ function renderBookNotes(g,c){
   button.onclick=()=>{
    const note=g.bookNotes.find(note=>note.id===button.dataset.bookNotePhoto);
    const index=Number(button.dataset.photoIndex);
-   viewPhoto(noteImages(note)[index],`note-${index+1}.jpg`);
+   const images=noteImages(note);
+   viewPhoto(images[index],`note-${index+1}.jpg`,true,{images,index});
   };
  });
 }
