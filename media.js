@@ -8,7 +8,7 @@ async function compressPhoto(file,maxLength=220000){
  if(file.size>20000000)throw Error('原始圖片請小於 20 MB');
  const url=URL.createObjectURL(file),img=new Image();
  try{await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(Error('無法讀取圖片，請改用 JPG 或 PNG'));img.src=url});
-  let size=maxLength<220000?1100:1600;
+  let size=maxLength>=240000?2400:maxLength<220000?1100:1600;
   for(let step=0;step<10;step++){const scale=Math.min(1,size/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);const data=canvas.toDataURL('image/jpeg',Math.max(0.55,0.85-step*0.04));if(data.length<=maxLength)return data;size=Math.round(size*.75)}
   throw Error('無法將整張圖片壓縮到可上傳大小，請另存較低解析度的 JPG 再試');
  }finally{URL.revokeObjectURL(url)}
@@ -18,7 +18,53 @@ function photoButton(label,action){const b=document.createElement('button');b.ty
 function downloadPhoto(src,filename){const bytes=Uint8Array.from(atob(src.split(',')[1]),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'}));const a=document.createElement('a');a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)}
 function photoPNG(src){return new Promise((resolve,reject)=>{const img=new Image();img.onerror=()=>reject(Error('圖片讀取失敗'));img.onload=()=>{const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);c.toBlob(b=>b?resolve(b):reject(Error('圖片轉換失敗')),'image/png')};img.src=src})}
 async function copyPhoto(src,status){if(!navigator.clipboard?.write||!window.ClipboardItem){status.textContent='此瀏覽器不支援複製圖片，請下載或放大後長按圖片。';return}try{await navigator.clipboard.write([new ClipboardItem({'image/png':photoPNG(src)})]);status.textContent='已複製圖片，可貼到其他支援圖片的應用程式。'}catch{status.textContent='無法複製圖片，請下載或放大後長按圖片。'}}
-function viewPhoto(src,filename,allowActions=true){const d=document.createElement('dialog');d.className='photo-viewer';d.setAttribute('aria-label','查看圖片');const head=document.createElement('div');head.className='photo-viewer-head';const title=document.createElement('strong');title.textContent='查看圖片';head.append(title,photoButton('關閉',()=>d.close()));const area=document.createElement('div');area.className='photo-viewer-area';const img=document.createElement('img');img.src=src;img.alt='附件圖片，點擊可切換原始大小';img.tabIndex=0;img.setAttribute('role','button');img.setAttribute('aria-pressed','false');const zoom=()=>{const full=img.classList.toggle('original');img.setAttribute('aria-pressed',String(full))};img.onclick=zoom;img.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();zoom()}};area.append(img);const status=document.createElement('p');status.className='hint';status.setAttribute('role','status');status.textContent='點圖片切換原始大小；手機可長按圖片。';const actions=document.createElement('div');actions.className='photo-actions';if(allowActions)actions.append(photoButton('複製圖片',()=>copyPhoto(src,status)),photoButton('下載圖片',()=>downloadPhoto(src,filename)));d.append(head,area,actions,status);d.addEventListener('close',()=>d.remove(),{once:true});document.body.append(d);d.showModal()}
+function viewPhoto(src,filename,allowActions=true){
+ const dialog=document.createElement('dialog');
+ dialog.className='photo-viewer';
+ dialog.setAttribute('aria-label','查看圖片');
+ const head=document.createElement('div'),title=document.createElement('strong');
+ head.className='photo-viewer-head';
+ title.textContent='查看圖片';
+ head.append(title,photoButton('關閉',()=>dialog.close()));
+ const area=document.createElement('div'),image=document.createElement('img');
+ area.className='photo-viewer-area';
+ image.alt='附件圖片';
+ area.append(image);
+ const controls=document.createElement('div'),status=document.createElement('p');
+ controls.className='photo-actions';
+ status.className='hint';
+ status.setAttribute('role','status');
+ let zoom=1;
+ const smaller=photoButton('縮小',()=>resize(zoom/1.5));
+ const larger=photoButton('放大',()=>resize(zoom*1.5));
+ function resize(scale){
+  zoom=Math.max(1,Math.min(6,scale));
+  const fit=Math.min(area.clientWidth,image.naturalWidth,area.clientHeight*image.naturalWidth/image.naturalHeight);
+  if(zoom===1){
+   image.classList.remove('original');
+   image.style.width='';
+  }else if(fit>0){
+   const width=Math.min(area.clientWidth,image.naturalWidth,window.innerHeight*.65*image.naturalWidth/image.naturalHeight);
+   image.classList.add('original');
+   image.style.width=width*zoom+'px';
+  }
+  smaller.disabled=zoom===1;
+  larger.disabled=zoom===6||!image.naturalWidth;
+  status.textContent='縮放 '+Math.round(zoom*100)+'%';
+ }
+ image.onload=()=>resize(1);
+ image.onerror=()=>{status.textContent='圖片無法開啟'};
+ image.src=src;
+ controls.append(smaller,photoButton('適合畫面',()=>resize(1)),larger);
+ const actions=document.createElement('div');
+ actions.className='photo-actions';
+ if(allowActions)actions.append(photoButton('複製圖片',()=>copyPhoto(src,status)),photoButton('下載圖片',()=>downloadPhoto(src,filename)));
+ dialog.append(head,controls,area,actions,status);
+ dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ document.body.append(dialog);
+ dialog.showModal();
+ resize(1);
+}
 
 function imageEditor(initial,max,{maxLength,caption,filenamePrefix}={}){
  let images=[...initial],pending=Promise.resolve(),busy=false,uploadError=null;
@@ -26,7 +72,7 @@ function imageEditor(initial,max,{maxLength,caption,filenamePrefix}={}){
  host.innerHTML='<div class="photo-grid"></div><input id="photoInput" hidden type="file" accept="image/jpeg,image/png,image/webp" '+(max>1?'multiple':'')+'><button type="button" class="photo-add quiet">＋ 新增圖片</button><p class="hint photo-status" role="status"></p>';
  const grid=host.querySelector('.photo-grid'),input=host.querySelector('input'),status=host.querySelector('.photo-status'),add=host.querySelector('.photo-add');add.onclick=()=>input.click();
  function draw(){grid.replaceChildren();images.forEach((src,i)=>{const filename=max===1?'payment-qr.jpg':(filenamePrefix||'receipt')+'-'+(i+1)+'.jpg',card=document.createElement('div');card.className='photo-card';const img=document.createElement('img');img.src=src;img.alt=max===1?'收款 QR Code':(caption||'費用附件')+' '+(i+1);const preview=photoButton('',()=>viewPhoto(src,filename));preview.className='photo-preview';preview.setAttribute('aria-label','查看圖片 '+(i+1));preview.append(img);const actions=document.createElement('div');actions.className='photo-actions';const remove=photoButton('移除',()=>{images.splice(i,1);draw()});remove.classList.add('photo-remove');remove.disabled=busy;actions.append(photoButton('查看',()=>viewPhoto(src,filename)),photoButton('複製',()=>copyPhoto(src,status)),photoButton('下載',()=>downloadPhoto(src,filename)),remove);card.append(preview,actions);grid.append(card)});input.disabled=add.disabled=busy||images.length>=max;add.textContent=busy?'圖片處理中…':images.length>=max?'已達圖片上限':'＋ 新增圖片';status.textContent=busy?'正在壓縮圖片…':`${images.length} / ${max} 張 · 支援 JPG、PNG、WebP`;}
- input.onchange=()=>{const files=[...input.files];input.value='';if(images.length+files.length>max){$('formError').textContent=`最多 ${max} 張，請先移除舊圖片`;return}uploadError=null;busy=true;draw();pending=(async()=>{try{const next=[];for(const f of files)next.push(await compressPhoto(f,maxLength));images.push(...next);if(host.isConnected)$('formError').textContent=''}catch(e){uploadError=e;if(host.isConnected)$('formError').textContent=e.message}finally{busy=false;draw()}})();};draw();
+ input.onchange=()=>{const files=[...input.files];input.value='';if(images.length+files.length>max){$('formError').textContent=`最多 ${max} 張，請先移除舊圖片`;return}uploadError=null;busy=true;draw();pending=(async()=>{try{const next=[];for(const f of files)next.push(await compressPhoto(f,await maxLength));images.push(...next);if(host.isConnected)$('formError').textContent=''}catch(e){uploadError=e;if(host.isConnected)$('formError').textContent=e.message}finally{busy=false;draw()}})();};draw();
  return async()=>{await pending;if(uploadError)throw uploadError;return images};
 }
 async function openExpenseImages(bookId,expenseId){

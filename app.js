@@ -950,7 +950,10 @@ function editBookNote(g,note,images=noteImages(note)){
   $('noteCategoryNew').hidden=categoryName.disabled=!creating;
   if(creating)categoryName.focus();
  };
- readImages=imageEditor(images,3,{maxLength:54000,caption:'記事圖片',filenamePrefix:'note'});
+ const photoLimit=g.cloud&&cfg.lineApiBase
+  ? api('capabilities').then(cap=>cap.notePhotoVersion===1?240000:54000,()=>54000)
+  : 54000;
+ readImages=imageEditor(images,3,{maxLength:photoLimit,caption:'記事圖片',filenamePrefix:'note'});
  if(note)$('removeBookNote').onclick=()=>{
   if($('submit').disabled)return;
   modal('刪除記事',`<p>確定移除「${esc(note.title)}」和附在這篇記事的圖片？</p>
