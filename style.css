@@ -406,3 +406,10 @@ dialog:modal{
 .travel-phrase-large{font-size:clamp(32px,6vw,54px);line-height:1.65;font-weight:700;word-break:keep-all;overflow-wrap:anywhere;margin:32px 0}
 .travel-phrase-translation{font-size:20px;line-height:1.6;color:var(--muted)}
 @media(max-width:600px){.travel-phrase-list{grid-template-columns:1fr}.travel-phrase-card{padding:18px}.travel-phrase-categories{gap:6px}.travel-phrase-categories button{padding:10px 14px}}
+
+.travel-phrase-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-block:8px 16px}
+.travel-phrase-tools .travel-phrase-categories{margin:0}
+.travel-phrase-show{display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:left;background:transparent;color:inherit;padding:0;border:0;width:100%;flex:1}
+.travel-phrase-show:hover{background:transparent;color:inherit}
+.phrase-speak{min-height:44px}
+.travel-phrase-card .phrase-speak{align-self:flex-start;border:1px solid var(--line)}

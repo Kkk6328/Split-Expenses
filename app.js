@@ -207,39 +207,103 @@ let itineraryTransportMode='transit';
 const travelPhraseGroups=[
  {id:'taxi',title:'搭車',icon:'🚕',items:[
   {zh:'請給我收據。',ko:'영수증 주세요.'},
-  {zh:'我是台灣人。',ko:'저는 대만 사람이에요.'}
+  {zh:'我是台灣人。',ko:'저는 대만 사람이에요.'},
+  {zh:'請帶我們到這個地址。',ko:'이 주소로 가 주세요.'},
+  {zh:'請在這裡停車。',ko:'여기서 세워 주세요.'},
+  {zh:'可以刷卡嗎？',ko:'카드 결제 되나요?'},
+  {zh:'可以幫我們打開後車廂嗎？',ko:'트렁크 좀 열어 주시겠어요?'}
  ]},
  {id:'dining',title:'吃飯',icon:'🍽️',items:[
   {zh:'我們有五個大人、一個小孩。',ko:'저희는 어른 다섯 명과 아이 한 명이에요.'},
-  {zh:'我們不吃牛肉。',ko:'저희는 소고기를 먹지 않아요.'}
+  {zh:'我們不吃牛肉。',ko:'저희는 소고기를 먹지 않아요.'},
+  {zh:'這道菜有牛肉或牛肉高湯嗎？',ko:'이 음식에 소고기나 소고기 육수가 들어가나요?'},
+  {zh:'請不要加辣。',ko:'맵지 않게 해 주세요.'},
+  {zh:'請給我們水。',ko:'물 좀 주세요.'},
+  {zh:'請問洗手間在哪裡？',ko:'화장실이 어디에 있나요?'},
+  {zh:'我們要結帳。',ko:'계산해 주세요.'}
  ]},
  {id:'shopping',title:'買東西',icon:'🛍️',items:[
   {zh:'請問這個多少錢？',ko:'이거 얼마예요?'},
   {zh:'請問這在哪裡？',ko:'이거 어디에 있어요?'},
   {zh:'請問其他間店有貨嗎？',ko:'다른 매장에는 재고가 있나요?'},
   {zh:'請問有別的款式嗎？',ko:'다른 디자인도 있나요?'},
-  {zh:'請問可以算便宜一點嗎？',ko:'조금 깎아 주실 수 있나요?'}
+  {zh:'請問可以算便宜一點嗎？',ko:'조금 깎아 주실 수 있나요?'},
+  {zh:'請問有其他尺寸嗎？',ko:'다른 사이즈도 있나요?'},
+  {zh:'請問可以試穿嗎？',ko:'입어 봐도 될까요?'},
+  {zh:'請問可以退稅嗎？',ko:'택스 리펀드 되나요?'},
+  {zh:'請給我一個袋子。',ko:'봉투 하나 주세요.'}
  ]}
 ];
 let travelPhraseCategory='taxi';
+let travelSpeechButton=null,travelSpeechEpoch=0;
+function stopTravelSpeech(){
+ travelSpeechEpoch++;
+ if(window.speechSynthesis)window.speechSynthesis.cancel();
+ if(travelSpeechButton){travelSpeechButton.textContent='▶ 播放韓文';travelSpeechButton.setAttribute('aria-pressed','false');travelSpeechButton=null;}
+}
+function playTravelPhrase(phrase,button){
+ if(travelSpeechButton===button){stopTravelSpeech();return;}
+ stopTravelSpeech();
+ if(!window.speechSynthesis||!window.SpeechSynthesisUtterance){toast('此瀏覽器不支援語音播放，請使用放大文字。');return;}
+ const epoch=travelSpeechEpoch;
+ const utterance=new SpeechSynthesisUtterance(phrase.ko);
+ utterance.lang='ko-KR';utterance.rate=0.85;
+ const voice=window.speechSynthesis.getVoices().find(item=>/^ko([-_]|$)/i.test(item.lang));
+ if(voice)utterance.voice=voice;
+ travelSpeechButton=button;button.textContent='■ 停止播放';button.setAttribute('aria-pressed','true');
+ const reset=()=>{if(travelSpeechEpoch===epoch&&travelSpeechButton===button){button.textContent='▶ 播放韓文';button.setAttribute('aria-pressed','false');travelSpeechButton=null;}};
+ utterance.onend=reset;
+ utterance.onerror=event=>{reset();if(!['canceled','interrupted'].includes(event.error))toast('無法播放韓文，請確認裝置已安裝韓文語音，或使用放大文字。');};
+ try{window.speechSynthesis.speak(utterance);}catch{reset();toast('無法播放韓文，請使用放大文字。');}
+}
+function customTravelPhrases(g){
+ let items=g?.travelPhrases;
+ if(g?.cloud&&!cfg.lineApiBase){try{items=JSON.parse(localStorage.getItem(preferenceKey('phrases',g.id))||'[]')}catch{items=[]}}
+ return Array.isArray(items)?items.filter(item=>item&&typeof item.zh==='string'&&typeof item.ko==='string'&&travelPhraseGroups.some(c=>c.id===item.category)):[];
+}
+function addTravelPhrase(){
+ const opened=group();if(!opened)return;
+ stopTravelSpeech();
+ const legacy=opened.cloud&&!cfg.lineApiBase;
+ modal('新增常用語',`<label>分類<select name="category">${travelPhraseGroups.map(c=>`<option value="${c.id}"${c.id===travelPhraseCategory?' selected':''}>${c.title}</option>`).join('')}</select></label><label>中文<textarea name="zh" required maxlength="160" placeholder="輸入中文句子"></textarea></label><label>韓文<textarea name="ko" lang="ko" required maxlength="300" placeholder="輸入對應的韓文句子"></textarea></label><p class="hint">請分別填寫中文與韓文，不會自動翻譯。${opened.cloud&&!legacy?'會儲存至此共用帳本，其他成員同步後可看到。':'只儲存在此瀏覽器；清除瀏覽資料後可能遺失。'}</p>`,'儲存常用語',async form=>{
+  const current=group();if(current?.id!==opened.id)throw Error('帳本已切換，請重新新增');
+  const category=form.get('category'),zh=form.get('zh').trim(),ko=form.get('ko').trim();
+  if(!zh||!ko||zh.length>160||ko.length>300||!travelPhraseGroups.some(c=>c.id===category))throw Error('請填寫有效的分類、中文與韓文');
+  const items=customTravelPhrases(current);
+  if(items.length>=100)throw Error('每本帳本最多新增 100 句常用語');
+  if(items.some(item=>item.category===category&&item.zh===zh&&item.ko===ko))throw Error('這句常用語已經存在');
+  const nextItems=[...items,{id:uid(),category,zh,ko}];
+  if(legacy){localStorage.setItem(preferenceKey('phrases',current.id),JSON.stringify(nextItems));}
+  else await commit({...structuredClone(current),travelPhrases:nextItems});
+  travelPhraseCategory=category;render();toast('常用語已儲存');
+ });
+}
 function showTravelPhrase(phrase,opener){
+ stopTravelSpeech();
  const previous=document.getElementById('travelPhraseDialog');
  if(previous)previous.remove();
  const dialog=document.createElement('dialog');
  dialog.id='travelPhraseDialog';dialog.className='travel-phrase-dialog';
  dialog.setAttribute('aria-labelledby','travelPhraseTitle');
- dialog.innerHTML=`<div class="dialog-head"><h2 id="travelPhraseTitle">給對方看</h2><button type="button" class="quiet" aria-label="關閉常用語">✕</button></div><p class="travel-phrase-large" lang="ko">${esc(phrase.ko)}</p><p class="travel-phrase-translation">${esc(phrase.zh)}</p>`;
+ dialog.innerHTML=`<div class="dialog-head"><h2 id="travelPhraseTitle">給對方看</h2><button type="button" class="quiet" aria-label="關閉常用語">✕</button></div><p class="travel-phrase-large" lang="ko">${esc(phrase.ko)}</p><p class="travel-phrase-translation">${esc(phrase.zh)}</p><button type="button" class="phrase-speak" aria-pressed="false">▶ 播放韓文</button>`;
  document.body.append(dialog);
- dialog.querySelector('button').onclick=()=>dialog.close();
- dialog.addEventListener('close',()=>{dialog.remove();if(opener?.isConnected)opener.focus()},{once:true});
+ dialog.querySelector('.dialog-head button').onclick=()=>dialog.close();
+ dialog.querySelector('.phrase-speak').onclick=event=>playTravelPhrase(phrase,event.currentTarget);
+ dialog.addEventListener('close',()=>{stopTravelSpeech();dialog.remove();if(opener?.isConnected)opener.focus()},{once:true});
  dialog.showModal();
 }
 function renderTravelPhrases(container){
+ stopTravelSpeech();
  const selected=travelPhraseGroups.find(category=>category.id===travelPhraseCategory)||travelPhraseGroups[0];
- container.innerHTML=`<section class="travel-phrases" aria-label="韓國旅遊常用語"><div class="travel-phrase-categories" aria-label="常用語分類">${travelPhraseGroups.map(category=>`<button type="button" class="quiet" data-phrase-category="${category.id}" aria-pressed="${category.id===selected.id}">${category.icon} ${category.title}</button>`).join('')}</div><h3>${selected.icon} ${selected.title}</h3><div class="travel-phrase-list">${selected.items.map((phrase,index)=>`<button type="button" class="travel-phrase-card" data-phrase-index="${index}" aria-label="放大：${esc(phrase.zh)}"><span class="travel-phrase-zh">${esc(phrase.zh)}</span><span class="travel-phrase-ko" lang="ko">${esc(phrase.ko)}</span><span class="travel-phrase-hint">點一下，放大給對方看 ↗</span></button>`).join('')}</div></section>`;
+ const g=group(),items=[...selected.items,...customTravelPhrases(g).filter(item=>item.category===selected.id)];
+ container.innerHTML=`<section class="travel-phrases" aria-label="韓國旅遊常用語"><div class="travel-phrase-tools"><div class="travel-phrase-categories" aria-label="常用語分類">${travelPhraseGroups.map(category=>`<button type="button" class="quiet" data-phrase-category="${category.id}" aria-pressed="${category.id===selected.id}">${category.icon} ${category.title}</button>`).join('')}</div><button type="button" id="addTravelPhrase">＋ 新增常用語</button></div><p class="hint">韓文語音由裝置提供，部分裝置需先下載韓文語音或連網。</p><h3>${selected.icon} ${selected.title}</h3><div class="travel-phrase-list">${items.map((phrase,index)=>`<article class="travel-phrase-card"><button type="button" class="travel-phrase-show" data-phrase-index="${index}" aria-label="放大：${esc(phrase.zh)}"><span class="travel-phrase-zh">${esc(phrase.zh)}</span><span class="travel-phrase-ko" lang="ko">${esc(phrase.ko)}</span><span class="travel-phrase-hint">${phrase.id?'自訂 · ':''}點一下，放大給對方看 ↗</span></button><button type="button" class="quiet phrase-speak" data-phrase-speak="${index}" aria-label="播放韓文：${esc(phrase.zh)}" aria-pressed="false">▶ 播放韓文</button></article>`).join('')}</div></section>`;
+ container.querySelector('#addTravelPhrase').onclick=addTravelPhrase;
  container.querySelectorAll('[data-phrase-category]').forEach(button=>button.onclick=()=>{travelPhraseCategory=button.dataset.phraseCategory;renderTravelPhrases(container);container.querySelector(`[data-phrase-category="${travelPhraseCategory}"]`).focus()});
- container.querySelectorAll('[data-phrase-index]').forEach(button=>button.onclick=()=>showTravelPhrase(selected.items[Number(button.dataset.phraseIndex)],button));
+ container.querySelectorAll('[data-phrase-index]').forEach(button=>button.onclick=()=>showTravelPhrase(items[Number(button.dataset.phraseIndex)],button));
+ container.querySelectorAll('[data-phrase-speak]').forEach(button=>button.onclick=()=>playTravelPhrase(items[Number(button.dataset.phraseSpeak)],button));
 }
+window.addEventListener('pagehide',stopTravelSpeech);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopTravelSpeech()});
 
 const bookTabs={phrases:'常用語',notes:'記事',itinerary:'行程',balances:'分帳結算',expenses:'花費明細',members:'成員'};
 function preferenceKey(kind,id=''){
@@ -1012,6 +1076,7 @@ function render(){const g=group();
  }
  if(tab!=='itinerary')itineraryView=null;
 if(tab!=='notes')notePhotoObserver?.disconnect();
+if(tab!=='phrases')stopTravelSpeech();
 document.body.classList.toggle('has-books',!!g);const picker=$('bookPicker');if(picker){picker.innerHTML=activeGroups().map(x=>`<option value="${esc(x.id)}" ${x.id===g?.id?'selected':''}>${esc(x.name)}</option>`).join('');picker.onchange=()=>{state.current=picker.value;persist();render()};$('mobileNew').onclick=newGroup;}if(cfg.lineApiBase&&$('emptyTitle')){$('emptyTitle').textContent=cloud()?'尚未建立帳本':'登入後查看帳本';$('emptyCreate').textContent=cloud()?'建立帳本':'LINE 登入'}$('groupCount').textContent=activeGroups().length;$('groups').innerHTML=activeGroups().map(x=>`<button class="group ${x.id===g?.id?'selected':''}" data-group="${x.id}">▤ ${esc(x.name)}<small>${x.members.length} 位成員 · ${x.expenses.length} 筆費用${x.cloud?' · 共用':''}</small></button>`).join('');$('groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.current=b.dataset.group;persist();render()});$('empty').hidden=!!g;$('book').hidden=!g;if(!g)return;$('deleteBook').hidden=g.cloud&&g.canDelete!==true;$('revokeInvites').hidden=!g.cloud||g.canDelete!==true;$('invite').hidden=g.cloud&&g.canDelete!==true;$('bookTitle').textContent=g.name;$('bookMeta').textContent=`建立日期 ${g.created}`;
  const member=signedInMember(g);
  const personalTotal=$('personalTotal');
