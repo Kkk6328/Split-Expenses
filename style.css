@@ -440,3 +440,7 @@ dialog:modal{
 .purchase-comic span{color:#9c5d3d;font-weight:600}
 .purchase-celebration .purchase-done{background:#ce7656;border-color:#ce7656}
 .purchase-celebration .purchase-done:hover{background:#b85f42}
+
+.travel-phrase-phonetic{display:flex;flex-direction:column;gap:5px;width:100%;padding:10px 12px;border-radius:10px;background:#fff5e8;color:#875733;font-size:17px;line-height:1.6;font-weight:600;overflow-wrap:anywhere}
+.travel-phrase-phonetic-label{font-size:11px;font-weight:500;letter-spacing:.04em;color:#9b7152}
+.travel-phrase-dialog .travel-phrase-phonetic{font-size:22px;margin:14px 0 20px}

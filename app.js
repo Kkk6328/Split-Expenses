@@ -206,32 +206,38 @@ const name=(g,id)=>g.members.find(m=>m.id===id)?.name||'未知成員';
 let itineraryTransportMode='transit';
 const travelPhraseGroups=[
  {id:'taxi',title:'搭車',icon:'🚕',items:[
-  {zh:'請給我收據。',ko:'영수증 주세요.'},
-  {zh:'我是台灣人。',ko:'저는 대만 사람이에요.'},
-  {zh:'請帶我們到這個地址。',ko:'이 주소로 가 주세요.'},
-  {zh:'請在這裡停車。',ko:'여기서 세워 주세요.'},
-  {zh:'可以刷卡嗎？',ko:'카드 결제 되나요?'},
-  {zh:'可以幫我們打開後車廂嗎？',ko:'트렁크 좀 열어 주시겠어요?'}
+  {zh:'請給我收據。',ko:'영수증 주세요.',phonetic:'永蘇增　啾誰呦'},
+  {zh:'我是台灣人。',ko:'저는 대만 사람이에요.',phonetic:'揪嫩　得滿　撒拉米耶呦'},
+  {zh:'請帶我們到這個地址。',ko:'이 주소로 가 주세요.',phonetic:'依　啾搜囉　嘎　啾誰呦'},
+  {zh:'請在這裡停車。',ko:'여기서 세워 주세요.',phonetic:'優機搜　塞窩　啾誰呦'},
+  {zh:'可以刷卡嗎？',ko:'카드 결제 되나요?',phonetic:'卡德　結接　堆娜呦？'},
+  {zh:'可以幫我們打開後車廂嗎？',ko:'트렁크 좀 열어 주시겠어요?',phonetic:'特隆克　總　優囉　啾西給搜呦？'},
+  {zh:'我們要去這裡，請看地圖。',ko:'여기로 가 주세요. 지도를 봐 주세요.',phonetic:'優機囉　嘎　啾誰呦。基都勒　哇　啾誰呦'},
+  {zh:'請幫我們叫兩台計程車。',ko:'택시 두 대 불러 주세요.',phonetic:'泰克西　度　得　不囉　啾誰呦'}
  ]},
  {id:'dining',title:'吃飯',icon:'🍽️',items:[
-  {zh:'我們有五個大人、一個小孩。',ko:'저희는 어른 다섯 명과 아이 한 명이에요.'},
-  {zh:'我們不吃牛肉。',ko:'저희는 소고기를 먹지 않아요.'},
-  {zh:'這道菜有牛肉或牛肉高湯嗎？',ko:'이 음식에 소고기나 소고기 육수가 들어가나요?'},
-  {zh:'請不要加辣。',ko:'맵지 않게 해 주세요.'},
-  {zh:'請給我們水。',ko:'물 좀 주세요.'},
-  {zh:'請問洗手間在哪裡？',ko:'화장실이 어디에 있나요?'},
-  {zh:'我們要結帳。',ko:'계산해 주세요.'}
+  {zh:'我們有五個大人、一個小孩。',ko:'저희는 어른 다섯 명과 아이 한 명이에요.',phonetic:'揪希嫩　喔倫　他瑟　明瓜　阿依　韓　明依耶呦'},
+  {zh:'我們不吃牛肉。',ko:'저희는 소고기를 먹지 않아요.',phonetic:'揪希嫩　搜勾基勒　摸吉　阿娜呦'},
+  {zh:'這道菜有牛肉或牛肉高湯嗎？',ko:'이 음식에 소고기나 소고기 육수가 들어가나요?',phonetic:'依　恩西給　搜勾基娜　搜勾基　育蘇嘎　德囉嘎娜呦？'},
+  {zh:'請不要加辣。',ko:'맵지 않게 해 주세요.',phonetic:'咩吉　安克　嘿　啾誰呦'},
+  {zh:'請給我們水。',ko:'물 좀 주세요.',phonetic:'穆　總　啾誰呦'},
+  {zh:'請問洗手間在哪裡？',ko:'화장실이 어디에 있나요?',phonetic:'花將西里　喔低耶　印娜呦？'},
+  {zh:'我們要結帳。',ko:'계산해 주세요.',phonetic:'給三嘿　啾誰呦'},
+  {zh:'可以幫我們打包嗎？',ko:'포장해 주실 수 있나요?',phonetic:'波將嘿　啾西　蘇　印娜呦？'},
+  {zh:'可以把醬料另外放嗎？',ko:'소스는 따로 주세요.',phonetic:'搜斯嫩　搭囉　啾誰呦'}
  ]},
  {id:'shopping',title:'買東西',icon:'🛍️',items:[
-  {zh:'請問這個多少錢？',ko:'이거 얼마예요?'},
-  {zh:'請問這在哪裡？',ko:'이거 어디에 있어요?'},
-  {zh:'請問其他間店有貨嗎？',ko:'다른 매장에는 재고가 있나요?'},
-  {zh:'請問有別的款式嗎？',ko:'다른 디자인도 있나요?'},
-  {zh:'請問可以算便宜一點嗎？',ko:'조금 깎아 주실 수 있나요?'},
-  {zh:'請問有其他尺寸嗎？',ko:'다른 사이즈도 있나요?'},
-  {zh:'請問可以試穿嗎？',ko:'입어 봐도 될까요?'},
-  {zh:'請問可以退稅嗎？',ko:'택스 리펀드 되나요?'},
-  {zh:'請給我一個袋子。',ko:'봉투 하나 주세요.'}
+  {zh:'請問這個多少錢？',ko:'이거 얼마예요?',phonetic:'依勾　喔嘛耶呦？'},
+  {zh:'請問這在哪裡？',ko:'이거 어디에 있어요?',phonetic:'依勾　喔低耶　以搜呦？'},
+  {zh:'請問其他間店有貨嗎？',ko:'다른 매장에는 재고가 있나요?',phonetic:'他倫　咩將欸嫩　接勾嘎　印娜呦？'},
+  {zh:'請問有別的款式嗎？',ko:'다른 디자인도 있나요?',phonetic:'他倫　低扎印都　印娜呦？'},
+  {zh:'請問可以算便宜一點嗎？',ko:'조금 깎아 주실 수 있나요?',phonetic:'啾根　嘎嘎　啾西　蘇　印娜呦？'},
+  {zh:'請問有其他尺寸嗎？',ko:'다른 사이즈도 있나요?',phonetic:'他倫　撒依茲都　印娜呦？'},
+  {zh:'請問可以試穿嗎？',ko:'입어 봐도 될까요?',phonetic:'依波　哇都　堆嘎呦？'},
+  {zh:'請問可以退稅嗎？',ko:'택스 리펀드 되나요?',phonetic:'泰克斯　哩碰德　堆娜呦？'},
+  {zh:'請給我一個袋子。',ko:'봉투 하나 주세요.',phonetic:'蹦兔　哈娜　啾誰呦'},
+  {zh:'請問退稅櫃台在哪裡？',ko:'택스 리펀드 카운터가 어디에 있나요?',phonetic:'泰克斯　哩碰德　卡溫特嘎　喔低耶　印娜呦？'},
+  {zh:'請問可以分開結帳嗎？',ko:'따로 계산할 수 있나요?',phonetic:'搭囉　給三哈　蘇　印娜呦？'}
  ]}
 ];
 let travelPhraseCategory='taxi';
@@ -265,18 +271,22 @@ function addTravelPhrase(){
  const opened=group();if(!opened)return;
  stopTravelSpeech();
  const legacy=opened.cloud&&!cfg.lineApiBase;
- modal('新增常用語',`<label>分類<select name="category">${travelPhraseGroups.map(c=>`<option value="${c.id}"${c.id===travelPhraseCategory?' selected':''}>${c.title}</option>`).join('')}</select></label><label>中文<textarea name="zh" required maxlength="160" placeholder="輸入中文句子"></textarea></label><label>韓文<textarea name="ko" lang="ko" required maxlength="300" placeholder="輸入對應的韓文句子"></textarea></label><p class="hint">請分別填寫中文與韓文，不會自動翻譯。${opened.cloud&&!legacy?'會儲存至此共用帳本，其他成員同步後可看到。':'只儲存在此瀏覽器；清除瀏覽資料後可能遺失。'}</p>`,'儲存常用語',async form=>{
+ modal('新增常用語',`<label>分類<select name="category">${travelPhraseGroups.map(c=>`<option value="${c.id}"${c.id===travelPhraseCategory?' selected':''}>${c.title}</option>`).join('')}</select></label><label>中文<textarea name="zh" required maxlength="160" placeholder="輸入中文句子"></textarea></label><label>韓文<textarea name="ko" lang="ko" required maxlength="300" placeholder="輸入對應的韓文句子"></textarea></label><label>台式中文諧音（選填）<textarea name="phonetic" maxlength="400" placeholder="例如：永蘇增 啾誰呦"></textarea></label><p class="hint">請分別填寫中文與韓文，不會自動翻譯；諧音是輔助讀音，可留空。${opened.cloud&&!legacy?'會儲存至此共用帳本，其他成員同步後可看到。':'只儲存在此瀏覽器；清除瀏覽資料後可能遺失。'}</p>`,'儲存常用語',async form=>{
   const current=group();if(current?.id!==opened.id)throw Error('帳本已切換，請重新新增');
-  const category=form.get('category'),zh=form.get('zh').trim(),ko=form.get('ko').trim();
-  if(!zh||!ko||zh.length>160||ko.length>300||!travelPhraseGroups.some(c=>c.id===category))throw Error('請填寫有效的分類、中文與韓文');
+  const category=form.get('category'),zh=form.get('zh').trim(),ko=form.get('ko').trim(),phonetic=(form.get('phonetic')||'').trim();
+  if(!zh||!ko||zh.length>160||ko.length>300||phonetic.length>400||!travelPhraseGroups.some(c=>c.id===category))throw Error('請填寫有效的分類、中文與韓文');
   const items=customTravelPhrases(current);
   if(items.length>=100)throw Error('每本帳本最多新增 100 句常用語');
   if(items.some(item=>item.category===category&&item.zh===zh&&item.ko===ko))throw Error('這句常用語已經存在');
-  const nextItems=[...items,{id:uid(),category,zh,ko}];
+  const nextItems=[...items,{id:uid(),category,zh,ko,...(phonetic?{phonetic}:{})}];
   if(legacy){localStorage.setItem(preferenceKey('phrases',current.id),JSON.stringify(nextItems));}
   else await commit({...structuredClone(current),travelPhrases:nextItems});
   travelPhraseCategory=category;render();toast('常用語已儲存');
  });
+}
+function travelPhoneticMarkup(phrase){
+ const text=typeof phrase.phonetic==='string'?phrase.phonetic.trim():'';
+ return `<span class="travel-phrase-phonetic"><span class="travel-phrase-phonetic-label">台式諧音 · 近似讀音</span><span>${text?esc(text):'尚未填寫諧音，請使用韓文播放。'}</span></span>`;
 }
 function showTravelPhrase(phrase,opener){
  stopTravelSpeech();
@@ -285,7 +295,7 @@ function showTravelPhrase(phrase,opener){
  const dialog=document.createElement('dialog');
  dialog.id='travelPhraseDialog';dialog.className='travel-phrase-dialog';
  dialog.setAttribute('aria-labelledby','travelPhraseTitle');
- dialog.innerHTML=`<div class="dialog-head"><h2 id="travelPhraseTitle">給對方看</h2><button type="button" class="quiet" aria-label="關閉常用語">✕</button></div><p class="travel-phrase-large" lang="ko">${esc(phrase.ko)}</p><p class="travel-phrase-translation">${esc(phrase.zh)}</p><button type="button" class="phrase-speak" aria-pressed="false">▶ 播放韓文</button>`;
+ dialog.innerHTML=`<div class="dialog-head"><h2 id="travelPhraseTitle">給對方看</h2><button type="button" class="quiet" aria-label="關閉常用語">✕</button></div><p class="travel-phrase-large" lang="ko">${esc(phrase.ko)}</p><p class="travel-phrase-translation">${esc(phrase.zh)}</p>${travelPhoneticMarkup(phrase)}<button type="button" class="phrase-speak" aria-pressed="false">▶ 播放韓文</button>`;
  document.body.append(dialog);
  dialog.querySelector('.dialog-head button').onclick=()=>dialog.close();
  dialog.querySelector('.phrase-speak').onclick=event=>playTravelPhrase(phrase,event.currentTarget);
@@ -296,7 +306,7 @@ function renderTravelPhrases(container){
  stopTravelSpeech();
  const selected=travelPhraseGroups.find(category=>category.id===travelPhraseCategory)||travelPhraseGroups[0];
  const g=group(),items=[...selected.items,...customTravelPhrases(g).filter(item=>item.category===selected.id)];
- container.innerHTML=`<section class="travel-phrases" aria-label="韓國旅遊常用語"><div class="travel-phrase-tools"><div class="travel-phrase-categories" aria-label="常用語分類">${travelPhraseGroups.map(category=>`<button type="button" class="quiet" data-phrase-category="${category.id}" aria-pressed="${category.id===selected.id}">${category.icon} ${category.title}</button>`).join('')}</div><button type="button" id="addTravelPhrase">＋ 新增常用語</button></div><p class="hint">韓文語音由裝置提供，部分裝置需先下載韓文語音或連網。</p><h3>${selected.icon} ${selected.title}</h3><div class="travel-phrase-list">${items.map((phrase,index)=>`<article class="travel-phrase-card"><button type="button" class="travel-phrase-show" data-phrase-index="${index}" aria-label="放大：${esc(phrase.zh)}"><span class="travel-phrase-zh">${esc(phrase.zh)}</span><span class="travel-phrase-ko" lang="ko">${esc(phrase.ko)}</span><span class="travel-phrase-hint">${phrase.id?'自訂 · ':''}點一下，放大給對方看 ↗</span></button><button type="button" class="quiet phrase-speak" data-phrase-speak="${index}" aria-label="播放韓文：${esc(phrase.zh)}" aria-pressed="false">▶ 播放韓文</button></article>`).join('')}</div></section>`;
+ container.innerHTML=`<section class="travel-phrases" aria-label="韓國旅遊常用語"><div class="travel-phrase-tools"><div class="travel-phrase-categories" aria-label="常用語分類">${travelPhraseGroups.map(category=>`<button type="button" class="quiet" data-phrase-category="${category.id}" aria-pressed="${category.id===selected.id}">${category.icon} ${category.title}</button>`).join('')}</div><button type="button" id="addTravelPhrase">＋ 新增常用語</button></div><p class="hint">台式諧音只是近似讀音，韓文有中文沒有的音與收尾音，請以韓文播放為準。語音由裝置提供，部分裝置需下載韓文語音或連網。</p><h3>${selected.icon} ${selected.title}</h3><div class="travel-phrase-list">${items.map((phrase,index)=>`<article class="travel-phrase-card"><button type="button" class="travel-phrase-show" data-phrase-index="${index}" aria-label="放大：${esc(phrase.zh)}"><span class="travel-phrase-zh">${esc(phrase.zh)}</span><span class="travel-phrase-ko" lang="ko">${esc(phrase.ko)}</span>${travelPhoneticMarkup(phrase)}<span class="travel-phrase-hint">${phrase.id?'自訂 · ':''}點一下，放大給對方看 ↗</span></button><button type="button" class="quiet phrase-speak" data-phrase-speak="${index}" aria-label="播放韓文：${esc(phrase.zh)}" aria-pressed="false">▶ 播放韓文</button></article>`).join('')}</div></section>`;
  container.querySelector('#addTravelPhrase').onclick=addTravelPhrase;
  container.querySelectorAll('[data-phrase-category]').forEach(button=>button.onclick=()=>{travelPhraseCategory=button.dataset.phraseCategory;renderTravelPhrases(container);container.querySelector(`[data-phrase-category="${travelPhraseCategory}"]`).focus()});
  container.querySelectorAll('[data-phrase-index]').forEach(button=>button.onclick=()=>showTravelPhrase(items[Number(button.dataset.phraseIndex)],button));
