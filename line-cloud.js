@@ -16,6 +16,7 @@ if(window.APP_CONFIG.lineApiBase){
   const url=new URL(location.href);
   url.search=renew?'?homeLogin=renew':'?homeLogin=start';
   url.searchParams.set('homeKey',homeKeys.publicKey);
+  url.searchParams.set('homeRelay',homeKeys.relay);
   url.hash='';
   homeLoginTransfer.start(homeKeys);
   updateOpenInLine();
@@ -39,6 +40,21 @@ if(window.APP_CONFIG.lineApiBase){
    loginWindow=null;
   })().finally(()=>{finishingHomeLogin=null});
   return finishingHomeLogin;
+ }
+ let checkingRelay=false;
+ async function resumeHomeLogin(){
+  const secret=homeLoginTransfer.relaySecret();
+  if(!installed||user||document.hidden||checkingRelay||!secret)return;
+  checkingRelay=true;
+  try{
+   const response=await fetch(cfg.lineApiBase,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'readHomeLoginRelay',secret})});
+   if(!response.ok)return;
+   const {code}=await response.json();
+   if(code&&secret===homeLoginTransfer.relaySecret()&&!user)await finishHomeLogin(code);
+  }catch{
+   // A later foreground check can retry after a connection failure.
+  }finally{checkingRelay=false}
  }
  function updateOpenInLine(){
   const hint=document.getElementById('openInLineHint');
@@ -145,10 +161,13 @@ if(window.APP_CONFIG.lineApiBase){
   '完成登入',form=>finishHomeLogin(form.get('homeLoginCode')));
  updateOpenInLine();
  if(installed){
+  setInterval(resumeHomeLogin,3000);
+  window.addEventListener('focus',resumeHomeLogin);
+  window.addEventListener('pageshow',resumeHomeLogin);
   window.addEventListener('focus',updateOpenInLine);
   window.addEventListener('pageshow',updateOpenInLine);
   document.addEventListener('visibilitychange',()=>{
-   if(!document.hidden)updateOpenInLine();
+   if(!document.hidden){updateOpenInLine();resumeHomeLogin()}
   });
  }
  window.addEventListener('load',async()=>{
@@ -171,6 +190,14 @@ if(window.APP_CONFIG.lineApiBase){
     await announce();
     if(homeLogin&&homeKey){
      const code=await homeLoginTransfer.seal(homeKey,token());
+     const relay=entry.searchParams.get('homeRelay');
+     if(relay){
+      try{
+       await request('publishHomeLoginRelay',{relay,code});
+       modal('LINE 授權完成','<p>請回到 iPhone 主畫面，點「分帳」繼續。</p>','完成',async()=>{});
+       return;
+      }catch(e){if(e.code==='line-auth')throw e}
+     }
      window.opener?.postMessage({type:'split-home-login',code},entry.origin);
      modal('接續主畫面登入',
       '<p>LINE 授權已完成。複製接續碼後，回 iPhone 主畫面點「分帳」，再點「完成主畫面登入」。</p>'+

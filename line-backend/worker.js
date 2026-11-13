@@ -170,12 +170,21 @@ async function saveBook(db, old, group, version, separateNoteImages) {
 const sessionDay = 86400000;
 const sessionIdle = 30 * sessionDay;
 const sessionAbsolute = 90 * sessionDay;
+const relayTable = 'CREATE TABLE IF NOT EXISTS home_login_relay (id TEXT PRIMARY KEY, code TEXT NOT NULL, expires INTEGER NOT NULL)';
+const relayId = value => typeof value==='string' && /^[a-f0-9]{64}$/.test(value);
 async function sessionHash(token) {
  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2,'0')).join('');
 }
 function payload(g){const {canDelete,owner,access,joinToken,...rest}=g;return rest}
-export default {async fetch(req,env){const headers={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Content-Type':'application/json','Cache-Control':'no-store'};const reply=(o,status=200)=>new Response(JSON.stringify(o),{status,headers});if(req.method==='OPTIONS')return new Response(null,{status:204,headers});if(req.method!=='POST')return reply({error:'Method not allowed'},405);try{if(req.headers.get('Origin')&&req.headers.get('Origin')!==env.APP_ORIGIN)fail('來源不允許',403);const raw=await req.text();if(raw.length>1250000)fail('資料過大',413);const b=JSON.parse(raw);if(raw.length>750000&&!(b.action==='save'&&b.separateNoteImages===true))fail('資料過大',413);const token=req.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>10000)fail('請登入 LINE',401);const db=env.DB, now=Date.now();
+export default {async fetch(req,env){const headers={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Content-Type':'application/json','Cache-Control':'no-store'};const reply=(o,status=200)=>new Response(JSON.stringify(o),{status,headers});if(req.method==='OPTIONS')return new Response(null,{status:204,headers});if(req.method!=='POST')return reply({error:'Method not allowed'},405);try{if(req.headers.get('Origin')&&req.headers.get('Origin')!==env.APP_ORIGIN)fail('來源不允許',403);const raw=await req.text();if(raw.length>1250000)fail('資料過大',413);const b=JSON.parse(raw);if(raw.length>750000&&!(b.action==='save'&&b.separateNoteImages===true))fail('資料過大',413);if(b.action==='readHomeLoginRelay'){
+ if(!relayId(b.secret))fail('登入請求無效');
+ await env.DB.prepare(relayTable).run();
+ const row=await env.DB.prepare('SELECT code FROM home_login_relay WHERE id=? AND expires>?')
+  .bind(await sessionHash(b.secret),Date.now()).first();
+ return reply({code:row?.code||null});
+}
+const token=req.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>10000)fail('請登入 LINE',401);const db=env.DB, now=Date.now();
 let v, session, hash;
 if (/^SH1\.[a-f0-9]{64}$/.test(token)) {
  hash=await sessionHash(token);
@@ -192,6 +201,16 @@ if (/^SH1\.[a-f0-9]{64}$/.test(token)) {
  }
 } else {
  const verification=await fetch('https://api.line.me/oauth2/v2.1/verify',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id_token:token,client_id:env.LINE_CHANNEL_ID})});v=await verification.json();if(!verification.ok||!v.sub)fail('LINE 登入已過期，請重新登入',401);
+}
+if(b.action==='publishHomeLoginRelay'){
+ if(session||!relayId(b.relay)||typeof b.code!=='string'||b.code.length>14500||
+    !/^SL1(?:\.[A-Za-z0-9_-]+){3}$/.test(b.code))fail('登入接續資料無效');
+ await db.prepare(relayTable).run();
+ await db.batch([
+  db.prepare('DELETE FROM home_login_relay WHERE expires<=?').bind(now),
+  db.prepare('INSERT OR IGNORE INTO home_login_relay(id,code,expires) VALUES(?,?,?)').bind(b.relay,b.code,now+600000)
+ ]);
+ return reply({ok:true});
 }
 if(b.action==='startHomeSession'){
  if(session)fail('請先完成 LINE 驗證',400);

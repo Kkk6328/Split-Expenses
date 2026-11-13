@@ -20,7 +20,10 @@ const homeLoginTransfer=(()=>{
   const pair=await crypto.subtle.generateKey(curve,true,['deriveBits']);
   const privateKey=await crypto.subtle.exportKey('jwk',pair.privateKey);
   const publicKey=encode(await crypto.subtle.exportKey('raw',pair.publicKey));
-  return {privateKey,publicKey};
+  const secret=Array.from(crypto.getRandomValues(new Uint8Array(32)),byte=>byte.toString(16).padStart(2,'0')).join('');
+  const digest=await crypto.subtle.digest('SHA-256',encoder.encode(secret));
+  const relay=Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
+  return {privateKey,publicKey,secret,relay};
  }
  async function keyFor(privateKey,publicKey,iv){
   const publicBytes=decode(publicKey);
@@ -60,7 +63,8 @@ const homeLoginTransfer=(()=>{
  }
  return {
   prepare,seal,unseal,claims,pending:()=>!!pending(),
-  start({privateKey}){localStorage.setItem(pendingKey,JSON.stringify({privateKey,expires:Date.now()+10*60*1000}))},
+  relaySecret:()=>pending()?.secret,
+  start({privateKey,secret}){localStorage.setItem(pendingKey,JSON.stringify({privateKey,secret,expires:Date.now()+10*60*1000}))},
   read:()=>localStorage.getItem(sessionKey),
   remember(token){localStorage.setItem(sessionKey,token);localStorage.removeItem(pendingKey)},
   forget(){localStorage.removeItem(sessionKey)}
