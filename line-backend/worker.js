@@ -117,6 +117,56 @@ async function itinerary(db, bookId, user, body){
  }
  fail('行程已變更或無權限，請重新載入',409);
 }
+const noteMediaTable = 'CREATE TABLE IF NOT EXISTS book_media(book_id TEXT NOT NULL,kind TEXT NOT NULL,target_id TEXT NOT NULL,data TEXT NOT NULL,revision TEXT NOT NULL,PRIMARY KEY(book_id,kind,target_id))';
+const validNotePhoto = image => typeof image === 'string' && image.length <= 54000 &&
+ /^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(image);
+
+async function saveBook(db, old, group, version, separateNoteImages) {
+ const prior = JSON.parse(old.data);
+ if (old.version !== version) fail('帳本已更新，請同步後再試', 409);
+ const statements = [];
+ const priorNotes = new Map((prior.bookNotes || []).map(note => [note.id, note]));
+ if (!separateNoteImages && [...priorNotes.values()].some(note => note.imageCount) &&
+     JSON.stringify(prior.bookNotes) !== JSON.stringify(group.bookNotes)) {
+  fail('請重新整理網站後再編輯記事', 409);
+ }
+ if (separateNoteImages) {
+  const notes = group.bookNotes || [];
+  if (!Array.isArray(notes)) fail('記事格式錯誤');
+  const seen = new Set();
+  group.bookNotes = notes.map(note => {
+   if (!note || !validId(note.id) || seen.has(note.id)) fail('記事編號無效');
+   seen.add(note.id);
+   const previous = priorNotes.get(note.id);
+   const {images, imageCount, ...entry} = note;
+   if (images === undefined) {
+    return previous?.imageCount ? {...entry, imageCount:previous.imageCount} : entry;
+   }
+   if (!Array.isArray(images) || images.length > 3 || images.some(image => !validNotePhoto(image))) {
+    fail('記事最多可附 3 張壓縮後的 JPEG 圖片');
+   }
+   if (images.length) {
+    statements.push(db.prepare(`INSERT OR REPLACE INTO book_media(book_id,kind,target_id,data,revision)
+      SELECT id,'note',?,?,? FROM books WHERE id=? AND version=?`)
+     .bind(note.id, JSON.stringify({images}), crypto.randomUUID(), group.id, version));
+    return {...entry, imageCount:images.length};
+   }
+   return entry;
+  });
+  for (const [id, previous] of priorNotes) {
+   if (!previous.imageCount || group.bookNotes.some(note => note.id === id && note.imageCount)) continue;
+   statements.push(db.prepare(`DELETE FROM book_media WHERE book_id=? AND kind='note' AND target_id=?
+     AND EXISTS (SELECT 1 FROM books WHERE id=? AND version=?)`).bind(group.id,id,group.id,version));
+  }
+ }
+ validate(group);
+ const update = db.prepare('UPDATE books SET version=version+1,data=? WHERE id=? AND version=?')
+  .bind(JSON.stringify(group),group.id,version);
+ if (!statements.length) return update.run();
+ await db.prepare(noteMediaTable).run();
+ const results = await db.batch([...statements, update]);
+ return results.at(-1);
+}
 function payload(g){const {canDelete,owner,access,joinToken,...rest}=g;return rest}
 export default {async fetch(req,env){const headers={'Access-Control-Allow-Origin':env.APP_ORIGIN,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Content-Type':'application/json','Cache-Control':'no-store'};const reply=(o,status=200)=>new Response(JSON.stringify(o),{status,headers});if(req.method==='OPTIONS')return new Response(null,{status:204,headers});if(req.method!=='POST')return reply({error:'Method not allowed'},405);try{if(req.headers.get('Origin')&&req.headers.get('Origin')!==env.APP_ORIGIN)fail('來源不允許',403);const raw=await req.text();if(raw.length>750000)fail('資料過大',413);const b=JSON.parse(raw);const token=req.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token||token.length>10000)fail('請登入 LINE',401);const verification=await fetch('https://api.line.me/oauth2/v2.1/verify',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id_token:token,client_id:env.LINE_CHANNEL_ID})});const v=await verification.json();if(!verification.ok||!v.sub)fail('LINE 登入已過期，請重新登入',401);const user=v.sub,db=env.DB;const output=r=>({...JSON.parse(r.data),version:r.version,cloud:true,canDelete:r.owner===user});const load=async id=>{if(!validId(id))fail('帳本編號無效');const r=await db.prepare('SELECT b.* FROM books b JOIN memberships m ON m.book_id=b.id WHERE b.id=? AND m.user_id=?').bind(id,user).first();if(!r)fail('無權存取帳本',403);return r};
 if(['listItinerary','saveItinerary','deleteItinerary'].includes(b.action)){
@@ -124,7 +174,7 @@ if(['listItinerary','saveItinerary','deleteItinerary'].includes(b.action)){
  if(JSON.parse(book.data).deletedAt)fail('帳本已刪除',403);
  return reply(await itinerary(db,book.id,user,b));
 }
-if(b.action==='capabilities')return reply({membershipVersion:3,mediaVersion:1,paymentVersion:2});
+if(b.action==='capabilities')return reply({membershipVersion:3,mediaVersion:1,paymentVersion:2,noteImageVersion:1});
 if(['getExpenseImages','saveExpenseImages','getPayment','savePayment'].includes(b.action)){
  const r=await load(b.groupId),g=JSON.parse(r.data);if(g.deletedAt)fail('帳本已刪除',403);
  const payment=b.action.endsWith('Payment'),writing=b.action.startsWith('save');
@@ -152,9 +202,21 @@ if(['getExpenseImages','saveExpenseImages','getPayment','savePayment'].includes(
  if(!result.meta.changes)fail('資料已更新，請重新開啟',409);
  return reply({ok:true,revision});
 }
+if (b.action === 'getNoteImages') {
+ const book = await load(b.groupId);
+ const group = JSON.parse(book.data);
+ if (group.deletedAt) fail('帳本已刪除',403);
+ const note = (group.bookNotes || []).find(note => note.id === b.noteId);
+ if (!note) fail('記事不存在',404);
+ if (!note.imageCount) return reply({images:note.images || []});
+ const row = await db.prepare("SELECT data FROM book_media WHERE book_id=? AND kind='note' AND target_id=?")
+  .bind(book.id,note.id).first();
+ if (!row) fail('記事圖片暫時無法讀取',404);
+ return reply(JSON.parse(row.data));
+}
 if(b.action==='list'){const r=await db.prepare('SELECT b.* FROM books b JOIN memberships m ON m.book_id=b.id WHERE m.user_id=? LIMIT 100').bind(user).all();return reply({groups:r.results.map(output)})}
 if(b.action==='create'){const incoming=payload(b.group);incoming.members=incoming.members?.map(m=>({id:m.id,name:m.name}));const self={id:user,name:String(v.name||'LINE 成員').slice(0,40)};if(!incoming.expenses?.length&&!incoming.settlements?.length)incoming.members=[self];else if(!incoming.members?.some(m=>m.id===user))incoming.members=[...(incoming.members||[]),self];applyLineProfile(incoming.members.find(m=>m.id===user),v);validate(incoming);const g={...incoming,cloud:true,version:1};await db.batch([db.prepare('INSERT INTO books(id,owner,version,data) VALUES(?,?,1,?)').bind(g.id,user,JSON.stringify(g)),db.prepare('INSERT INTO memberships(book_id,user_id) VALUES(?,?)').bind(g.id,user)]);return reply({group:{...g,canDelete:true}})}
-if(b.action==='save'){validate(b.group);const old=await load(b.group.id),prior=JSON.parse(old.data);if(JSON.stringify(prior.members)!==JSON.stringify(b.group.members))fail('成員只能透過 LINE 邀請加入，請先同步帳本',403);if((prior.deletedAt||null)!==(b.group.deletedAt||null)&&old.owner!==user)fail('只有建立者可以刪除或還原',403);const g={...payload(b.group),cloud:true,version:old.version+1};const r=await db.prepare('UPDATE books SET version=version+1,data=? WHERE id=? AND version=?').bind(JSON.stringify(g),g.id,b.version).run();if(!r.meta.changes)fail('帳本已更新，請同步後再試',409);return reply({group:{...g,canDelete:old.owner===user}})}
+if(b.action==='save'){if(!b.group)fail('帳本格式錯誤');const old=await load(b.group.id),prior=JSON.parse(old.data);if(JSON.stringify(prior.members)!==JSON.stringify(b.group.members))fail('成員只能透過 LINE 邀請加入，請先同步帳本',403);if((prior.deletedAt||null)!==(b.group.deletedAt||null)&&old.owner!==user)fail('只有建立者可以刪除或還原',403);const g={...payload(b.group),cloud:true,version:old.version+1};const r=await saveBook(db,old,g,b.version,b.separateNoteImages===true);if(!r.meta.changes)fail('帳本已更新，請同步後再試',409);return reply({group:{...g,canDelete:old.owner===user}})}
 if(b.action==='invite'){const r=await load(b.groupId);if(r.owner!==user||JSON.parse(r.data).deletedAt)fail('僅建立者可邀請成員',403);const token=crypto.randomUUID().replaceAll('-','')+crypto.randomUUID().replaceAll('-','');await db.prepare('INSERT INTO invites(token,book_id) VALUES(?,?)').bind(token,r.id).run();return reply({invite:token})}
 if(b.action==='revokeInvites'){const r=await load(b.groupId);if(r.owner!==user)fail('僅建立者可停用邀請',403);await db.prepare('UPDATE invites SET revoked=1 WHERE book_id=?').bind(r.id).run();return reply({ok:true})}
 if(b.action==='addMember'){const r=await load(b.groupId);if(r.owner!==user)fail('只有建立者可以預設成員',403);const g=JSON.parse(r.data);if(g.deletedAt)fail('帳本已刪除');const name=typeof b.name==='string'?b.name.trim():'';if(!name||name.length>40||g.members.some(m=>m.name===name))fail('請輸入不重複的成員暱稱');g.members.push({id:crypto.randomUUID(),name});validate(g);const changed=await db.prepare('UPDATE books SET version=version+1,data=? WHERE id=? AND version=?').bind(JSON.stringify(g),r.id,r.version).run();if(!changed.meta.changes)fail('帳本已更新，請同步後重試',409);return reply({group:output(await load(r.id))})}
