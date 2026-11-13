@@ -435,3 +435,8 @@ dialog:modal{
 @keyframes purchase-pop{from{opacity:0;transform:scale(.88) rotate(-3deg)}to{opacity:1;transform:scale(1) rotate(0)}}
 @media(prefers-reduced-motion:reduce){.purchase-comic{animation:none}}
 @media(max-width:600px){.purchase-comic{max-width:300px}.purchase-quote{margin-block:16px;font-size:24px}}
+
+.purchase-comic img{border-radius:24px;box-shadow:0 8px 26px #b77d3b12}
+.purchase-comic span{color:#9c5d3d;font-weight:600}
+.purchase-celebration .purchase-done{background:#ce7656;border-color:#ce7656}
+.purchase-celebration .purchase-done:hover{background:#b85f42}

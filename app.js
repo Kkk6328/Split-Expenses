@@ -938,17 +938,27 @@ function preparePurchaseSound(){
 function playPurchaseSound(){
  if(purchaseSoundMuted||!purchaseAudioContext||purchaseAudioContext.state!=='running')return false;
  try{
-  const context=purchaseAudioContext,start=context.currentTime;
-  [659.25,830.61,987.77,1318.51].forEach((frequency,index)=>{
-   const oscillator=context.createOscillator(),gain=context.createGain(),at=start+index*.11;
-   oscillator.type='sine';oscillator.frequency.setValueAtTime(frequency,at);
-   gain.gain.setValueAtTime(0,at);gain.gain.linearRampToValueAtTime(.065,at+.012);gain.gain.exponentialRampToValueAtTime(.001,at+.24);
-   oscillator.connect(gain);gain.connect(context.destination);oscillator.start(at);oscillator.stop(at+.25);
+  const context=purchaseAudioContext,start=context.currentTime+.01;
+  const tone=(frequency,offset,duration,volume,type='triangle')=>{
+   const oscillator=context.createOscillator(),gain=context.createGain(),at=start+offset;
+   oscillator.type=type;oscillator.frequency.setValueAtTime(frequency,at);
+   gain.gain.setValueAtTime(0,at);gain.gain.linearRampToValueAtTime(volume,at+.008);gain.gain.exponentialRampToValueAtTime(.0001,at+duration);
+   oscillator.connect(gain);gain.connect(context.destination);oscillator.start(at);oscillator.stop(at+duration+.02);
    oscillator.onended=()=>{oscillator.disconnect();gain.disconnect()};
+  };
+  // Bouncy major-key "ta-da!": melody, warm chords, and sparkling bell overtones.
+  [[523.25,0,.14],[659.25,.14,.14],[783.99,.28,.14],[1046.5,.42,.27],[987.77,.72,.12],[1046.5,.86,.5]].forEach(([note,at,duration])=>{
+   tone(note,at,duration,.10);tone(note*2,at,duration*.65,.022,'sine');
   });
+  [[261.63,329.63,392],[349.23,440,523.25],[261.63,329.63,392,523.25]].forEach((chord,index)=>{
+   const offset=[0,.42,.86][index],duration=[.17,.22,.55][index];
+   chord.forEach(note=>tone(note,offset,duration,.023,'sine'));
+  });
+  [[1567.98,1.1],[2093,1.22],[2637.02,1.34]].forEach(([note,at])=>tone(note,at,.22,.027,'sine'));
   return true;
  }catch{return false;}
 }
+
 function showPurchaseCelebration(noteId,title){
  let index=Math.floor(Math.random()*purchaseCelebrations.length);
  if(index===lastPurchaseCelebration)index=(index+1)%purchaseCelebrations.length;
@@ -956,7 +966,7 @@ function showPurchaseCelebration(noteId,title){
  const dialog=document.createElement('dialog');
  dialog.className='purchase-celebration';dialog.id='purchaseCelebration';
  dialog.setAttribute('aria-labelledby','purchaseCelebrationTitle');
- dialog.innerHTML=`<div class="dialog-head"><h2 id="purchaseCelebrationTitle">已買到 🎉</h2><button type="button" class="quiet" aria-label="關閉購物語錄">✕</button></div><p class="purchase-item-name">${esc(title)}</p><div class="purchase-comic"><img src="assets/shopping-shiba.svg?v=1" alt="黑柴戴墨鏡提滿購物袋開心跳起，小錢包在旁邊冒汗" width="640" height="340"><span>本人：快樂起飛！<br>錢包：我先冷靜一下。</span></div><p class="purchase-quote">${esc(purchaseCelebrations[index])}</p><button type="button" class="purchase-done">開心收下！</button><div class="purchase-sound-controls"><button type="button" class="quiet purchase-sound-toggle" aria-pressed="${!purchaseSoundMuted}">${purchaseSoundMuted?'🔇 提示音：關閉':'🔔 提示音：開啟'}</button><small>音效受裝置音量、靜音與瀏覽器設定影響。</small></div>`;
+ dialog.innerHTML=`<div class="dialog-head"><h2 id="purchaseCelebrationTitle">已買到 🎉</h2><button type="button" class="quiet" aria-label="關閉購物語錄">✕</button></div><p class="purchase-item-name">${esc(title)}</p><div class="purchase-comic"><img src="assets/shopping-shiba-plush.webp?v=1" alt="毛茸茸黑柴背著黃色背包，抱滿購物袋開心跳起，小錢包驚訝到轉圈圈" width="1024" height="683"><span>本人：這些都是必需品！<br>錢包：妳開心就好……</span></div><p class="purchase-quote">${esc(purchaseCelebrations[index])}</p><button type="button" class="purchase-done">開心收下！</button><div class="purchase-sound-controls"><button type="button" class="quiet purchase-sound-toggle" aria-pressed="${!purchaseSoundMuted}">${purchaseSoundMuted?'🔇 提示音：關閉':'🔔 提示音：開啟'}</button><small>音效受裝置音量、靜音與瀏覽器設定影響。</small></div>`;
  document.body.append(dialog);
  dialog.querySelectorAll('.dialog-head button,.purchase-done').forEach(button=>button.onclick=()=>dialog.close());
  dialog.querySelector('.purchase-sound-toggle').onclick=event=>{purchaseSoundMuted=!purchaseSoundMuted;try{localStorage.setItem('split-purchase-sound-muted',String(purchaseSoundMuted))}catch{}event.currentTarget.textContent=purchaseSoundMuted?'🔇 提示音：關閉':'🔔 提示音：開啟';event.currentTarget.setAttribute('aria-pressed',String(!purchaseSoundMuted));};
